@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Optional: Importiere eine Schriftart, wenn du eine spezifische verwendest */
+/* @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap'); */
+
+body {
+    @apply bg-background text-textPrimary antialiased;
+    font-family: 'Inter', sans-serif; /* Fallback, falls Inter nicht geladen wird */
+}
+
+/* Allgemeine Container-Styles */
+.main-container {
+    @apply max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8;
+}
+
+/* Hilfsklassen für Buttons (Beispiele) */
+.btn {
+    @apply px-4 py-2 rounded-md font-semibold text-white transition-colors duration-150 ease-in-out focus:outline-none focus:ring-2 focus:ring-offset-2;
+}
+.btn-primary {
+    @apply bg-primary hover:bg-primary-dark focus:ring-primary;
+}
+.btn-secondary {
+    @apply bg-secondary hover:bg-secondary-dark focus:ring-secondary;
+}
+.btn-danger {
+    @apply bg-red-500 hover:bg-red-600 focus:ring-red-500;
+}
+.btn-outline-primary {
+    @apply bg-transparent border border-primary text-primary hover:bg-primary/10 focus:ring-primary;
+}
+
+/* Formular-Input Styling (Basis) */
+.form-input {
+    @apply block w-full px-3 py-2 border border-neutral rounded-md shadow-sm focus:outline-none focus:ring-primary focus:border-primary sm:text-sm;
+}
+.form-label {
+    @apply block text-sm font-medium text-textSecondary mb-1;
+}
+
+/* Card Styling */
+.card {
+    @apply bg-surface shadow-lg rounded-lg p-6;
+}
+
+/* Toast Styling (react-hot-toast) */
+/* Du kannst dies anpassen oder die Standard-Styles verwenden */
+/* .go2292789941 {
+  font-family: 'Inter', sans-serif !important;
+} */
+
+/* Scrollbar Styling (optional, für Webkit-Browser) */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: #bdc3c7; /* neutral */
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #95a5a6; /* neutral-dark */
+}

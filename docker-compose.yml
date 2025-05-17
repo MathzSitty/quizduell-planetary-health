@@ -1,0 +1,62 @@
+# ./docker-compose.yml
+services:
+  postgres_db:
+    image: postgres:14-alpine
+    container_name: planetary_quiz_postgres
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - postgres_quiz_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: quizduell_db
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d quizduell_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: planetary_quiz_backend
+    ports:
+      - "5001:5001"
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres_db:5432/quizduell_db?schema=public
+      JWT_SECRET: "ein_sicheres_jwt_secret_fuer_dein_projekt"
+      JWT_EXPIRES_IN: 7d
+      PORT: 5001
+      FRONTEND_URL: http://localhost:3000
+      NODE_ENV: development
+      INITIAL_ADMIN_EMAIL: admin@example.com
+      INITIAL_ADMIN_PASSWORD: SecurePassword123!
+      INITIAL_ADMIN_NAME: Admin
+      INITIAL_ADMIN_UNIHANDLE: HS-Admin
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:5001/api
+        NEXT_PUBLIC_SOCKET_URL: http://localhost:5001
+    container_name: planetary_quiz_frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      NODE_ENV: production
+    restart: unless-stopped
+
+volumes:
+  postgres_quiz_data:
+    driver: local

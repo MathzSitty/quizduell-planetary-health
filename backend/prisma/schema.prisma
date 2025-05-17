@@ -1,0 +1,78 @@
+// backend/prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String
+  uniHandle String?
+  password  String
+  role      String   @default("USER")
+  score     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  gamesAsPlayer1 Game[] @relation("Player1Games")
+  gamesAsPlayer2 Game[] @relation("Player2Games")
+  questionsAuthored Question[] @relation("AuthoredQuestions")
+  gamesWon       Game[]     @relation("WonGames")
+}
+
+model Question {
+  id            String   @id @default(cuid())
+  text          String   @unique
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctOption String
+  category      String?
+  authorId      String?
+  author        User?    @relation("AuthoredQuestions", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  gameRounds GameRound[]
+}
+
+model Game {
+  id              String    @id @default(cuid())
+  player1Id       String
+  player2Id       String?
+  status          String    @default("PENDING")
+  currentQuestionIdx Int    @default(0)
+  player1Score    Int       @default(0)
+  player2Score    Int       @default(0)
+  winnerId        String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  player1         User      @relation("Player1Games", fields: [player1Id], references: [id])
+  player2         User?     @relation("Player2Games", fields: [player2Id], references: [id])
+  winner          User?     @relation("WonGames", fields: [winnerId], references: [id])
+  rounds          GameRound[]
+}
+
+model GameRound {
+  id                  String    @id @default(cuid())
+  gameId              String
+  questionId          String
+  roundNumber         Int
+  player1AnsweredOption String?
+  player2AnsweredOption String?
+  player1Correct      Boolean?
+  player2Correct      Boolean?
+  createdAt           DateTime  @default(now())
+
+  game                Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  question            Question  @relation(fields: [questionId], references: [id])
+
+  @@unique([gameId, roundNumber])
+}

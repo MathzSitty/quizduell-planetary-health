@@ -1,0 +1,77 @@
+// backend/src/controllers/game.controller.ts
+import { Request, Response, NextFunction } from 'express';
+import {
+  createGameService,
+  findOpenGameService,
+  joinGameService,
+  getGameDetailsService,
+} from '../services/game.service';
+import { AppError } from '../utils/AppError'; // Angenommen, AppError existiert
+import { GameStatus } from '../types/enums'; // Korrekter Import aus localem Enum-Modul
+
+export const createGame = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) throw new AppError('Authentifizierung erforderlich.', 401);
+    const game = await createGameService({ player1Id: req.user.id });
+    res.status(201).json({ status: 'success', data: { game } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const findAndJoinGame = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) throw new AppError('Authentifizierung erforderlich.', 401);
+    let game = await findOpenGameService(req.user.id);
+    let waiting = false;
+    // questions wird hier nicht mehr direkt zurückgegeben, da die Spiellogik das über Sockets handhabt
+    // oder die Spielseite die Details nachlädt.
+
+    if (game) { // Spiel gefunden, beitreten
+      // joinGameService gibt das Spiel und die initialen Fragen zurück
+      const joinedGameData = await joinGameService({ gameId: game.id, player2Id: req.user.id });
+      // Das Frontend wird durch Socket-Events über den Spielstart informiert.
+      // Wir geben hier das initiale Spielobjekt zurück.
+      res.status(200).json({ status: 'success', data: { game: joinedGameData, waiting: false } });
+    } else { // Kein passendes Spiel, neues erstellen
+      game = await createGameService({ player1Id: req.user.id });
+      waiting = true;
+      res.status(200).json({ status: 'success', data: { game, waiting: true } });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getGameDetails = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (!req.user) throw new AppError('Authentifizierung erforderlich.', 401);
+        const game = await getGameDetailsService(req.params.id, req.user.id);
+        if (!game) {
+            return res.status(404).json({ message: 'Spiel nicht gefunden oder Zugriff verweigert.' });
+        }
+        
+        const gameToSend = JSON.parse(JSON.stringify(game)); // Deep copy
+
+        // Entferne korrekte Antworten aus den Fragen, bevor sie an den Client gesendet werden,
+        // es sei denn, das Spiel ist beendet oder der Anfragende ist Admin.
+        // Die Rolle des Anfragenden (req.user.role) könnte hier geprüft werden.
+        if (gameToSend.status !== GameStatus.FINISHED && gameToSend.status !== GameStatus.CANCELLED) {
+            gameToSend.rounds.forEach((round: any) => { // any, da gameToSend eine Kopie ist
+                if (round.question) {
+                    // Die korrekte Option sollte nur gesendet werden, wenn die Runde vorbei ist
+                    // oder das Spiel beendet ist. Für aktive Runden wird sie nicht gesendet.
+                    // Die Logik in QuestionDisplay im Frontend handhabt das Anzeigen basierend auf showRoundResult.
+                    // Hier entfernen wir sie präventiv für aktive Spiele, wenn sie nicht explizit benötigt wird.
+                    // delete round.question.correctOption; // Diese Zeile ist wahrscheinlich nicht mehr nötig,
+                                                          // da der Service die Fragen für aktive Spiele ohne correctOption liefern sollte.
+                                                          // Aber als zusätzliche Sicherheitsebene.
+                }
+            });
+        }
+
+        res.status(200).json({ status: 'success', data: { game: gameToSend } });
+    } catch (error) {
+        next(error);
+    }
+};

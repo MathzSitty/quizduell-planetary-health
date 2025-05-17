@@ -1,0 +1,119 @@
+# Node.js & npm/yarn
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# package-lock.json # Uncomment if you only want to commit yarn.lock or pnpm-lock.yaml
+# yarn.lock       # Uncomment if you only want to commit package-lock.json or pnpm-lock.yaml
+# pnpm-lock.yaml  # Uncomment if you only want to commit package-lock.json or yarn.lock
+
+# Build-Artefakte & Kompilate
+dist/
+build/
+out/
+coverage/
+*.log
+logs
+*.pid
+*.seed
+*.pid.lock
+
+# Environment-Variablen-Dateien (SEHR WICHTIG!)
+# Committe niemals deine .env Dateien mit echten Secrets!
+.env
+.env*.local
+.env.development
+.env.test
+.env.production
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Docker
+# docker-compose.override.yml # Kann lokale Overrides enthalten, die nicht für alle gelten sollen
+
+# Betriebssystem-spezifische Dateien
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE-spezifische Konfigurationsdateien
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Next.js spezifisch (Frontend)
+frontend/.next/
+# frontend/out/ # Bereits oben abgedeckt, aber zur Klarheit
+
+# Backend spezifisch
+backend/node_modules/ # Bereits oben abgedeckt, aber zur Klarheit
+backend/dist/         # Bereits oben abgedeckt
+backend/dev.db        # Wenn SQLite für lokale Entwicklung im Backend-Ordner verwendet wird
+backend/dev.db-journal # SQLite Journal-Datei
+# backend/prisma/dev.db # Falls die SQLite DB im Prisma-Ordner wäre
+
+# Prisma (falls die DB-Datei nicht im Backend-Ordner ist)
+# prisma/dev.db
+# prisma/dev.db-journal
+
+# Test-Runner spezifische Dateien
+/tests/coverage/ # Beispiel für Jest Coverage Report
+
+# Temporäre Dateien
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Optional: Wenn du bestimmte Log-Dateien committen möchtest,
+# kannst du sie hier mit einem Ausrufezeichen (!) wieder hinzufügen,
+# aber sei vorsichtig mit sensiblen Informationen.
+# !logs/production.log
+
+# Docker-bezogene temporäre Dateien
+.docker/data/
+.docker-sync/
+**/temp/
+
+# PostgreSQL spezifisch
+*.sql
+*.dump
+*.backup
+*.pgdump
+
+# TypeScript spezifisch
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Next.js cache
+.next/cache/
+.swc/
+
+# Prisma spezifisch
+generated/
+dev.db-*
+
+# Deployment-bezogen
+.vercel
+.netlify
+.now
+
+# Frontend-Optimierung
+**/public/workbox-*.js
+**/public/sw.js
+**/public/service-worker.js
+
+# Debugger & Editor
+.vscode-test/
+.history/
+**/.turbo
+
+# Tests
+**/playwright-report/
+**/test-results/

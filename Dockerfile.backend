@@ -1,0 +1,37 @@
+# ./Dockerfile.backend
+FROM node:18-alpine
+
+WORKDIR /app
+
+# Installiere notwendige Pakete
+RUN apk add --no-cache openssl bash curl
+
+# Kopiere package.json und installiere Abhängigkeiten
+COPY ./backend/package*.json ./
+RUN npm install
+
+# Kopiere restliche Backend-Dateien
+COPY ./backend ./
+
+# PostgreSQL-Anpassung und Prisma-Setup
+RUN sed -i 's/provider = "sqlite"/provider = "postgresql"/' ./prisma/schema.prisma
+RUN npx prisma generate
+
+# TypeScript kompilieren
+RUN npm run build
+
+# Überprüfe, ob das Build korrekt erstellt wurde
+RUN ls -la ./dist/src || echo "Fehler: dist/src Verzeichnis existiert nicht!"
+RUN ls -la ./dist || echo "Fehler: dist Verzeichnis existiert nicht!"
+
+EXPOSE 5001
+
+# Start-Script mit korrektem Pfad zur JS-Datei
+CMD sh -c "echo 'Warte auf Datenbank...' && \
+    sleep 5 && \
+    echo 'Führe Migrationen aus...' && \
+    npx prisma migrate deploy && \
+    echo 'Initialisiere Datenbank mit Seed-Daten...' && \
+    npx prisma db seed && \
+    echo 'Starte Server...' && \
+    node ./dist/src/server.js"
