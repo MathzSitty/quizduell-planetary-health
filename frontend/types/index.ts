@@ -64,19 +64,21 @@ export interface GameStartedPayload {
     timeLimit: number;
 }
 
+// Update bei der RoundResultPayload-Schnittstelle
 export interface RoundResultPayload {
     gameId: string;
     roundNumber: number;
     questionId: string;
     player1Answer?: string | null;
     player2Answer?: string | null;
-    correctOption: string; // Jetzt wird die korrekte Option gesendet
+    correctOption: string;
     player1Correct?: boolean | null;
     player2Correct?: boolean | null;
     player1CurrentScore: number;
     player2CurrentScore: number;
-    nextQuestion?: Question | null; // Nächste Frage (ohne korrekte Antwort)
+    nextQuestion?: Question | null;
     gameStatus: GameStatus;
+    forcedByTimeout?: boolean; // Neues Flag hinzugefügt
 }
 
 // Typ für AuthContext

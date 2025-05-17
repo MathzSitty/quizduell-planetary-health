@@ -233,6 +233,8 @@ export function initializeSocketIO(io: Server) {
             if (!socket.data.userId) return callback({ error: 'Nicht authentifiziert.' });
             try {
                 const result = await submitAnswerService(gameId, socket.data.userId, roundNumber, selectedOption);
+                
+                // Überprüfen, ob beide Spieler geantwortet haben
                 const isAnswerComplete = result.roundResult.player1Answer !== null && result.roundResult.player2Answer !== null;
 
                 // Informiere den anderen Spieler, dass dieser Spieler geantwortet hat
@@ -241,19 +243,23 @@ export function initializeSocketIO(io: Server) {
                     roundNumber
                 });
 
-                // Sende Rundenergebnis an alle im Spielraum
-                io.to(gameId).emit('round_result', {
-                    gameId,
-                    ...result.roundResult,
-                    nextQuestion: isAnswerComplete ? result.nextQuestion : null, // Nur senden wenn beide geantwortet haben
-                    gameStatus: result.game.status
-                });
+                // WICHTIG: Nur dann das volle Rundenergebnis senden, wenn beide geantwortet haben
+                // Ansonsten nur dem Spieler bestätigen, dass seine Antwort registriert wurde
+                if (isAnswerComplete) {
+                    // Beide haben geantwortet - sende vollständiges Rundenergebnis an alle
+                    io.to(gameId).emit('round_result', {
+                        gameId,
+                        ...result.roundResult,
+                        nextQuestion: result.nextQuestion,
+                        gameStatus: result.game.status
+                    });
 
-                // Wenn die Runde oder das Spiel beendet ist
-                if (result.game.status === GameStatus.FINISHED) {
-                    io.to(gameId).emit('game_over', result.game);
-                    // Räume aufräumen
-                    gameRooms.delete(gameId);
+                    // Wenn die Runde oder das Spiel beendet ist
+                    if (result.game.status === GameStatus.FINISHED) {
+                        io.to(gameId).emit('game_over', result.game);
+                        // Räume aufräumen
+                        gameRooms.delete(gameId);
+                    }
                 }
 
                 callback({ 
@@ -310,12 +316,14 @@ export function initializeSocketIO(io: Server) {
                     wasTimeout: true
                 });
 
-                // Sende Rundenergebnis an alle im Spielraum
+                // WICHTIG: Bei Timeout IMMER das Rundenergebnis senden, unabhängig davon, 
+                // ob beide geantwortet haben oder nicht
                 io.to(gameId).emit('round_result', {
                     gameId,
                     ...result.roundResult,
                     nextQuestion: result.nextQuestion,
-                    gameStatus: result.game.status
+                    gameStatus: result.game.status,
+                    forcedByTimeout: true  // Neues Flag zur Kennzeichnung von Timeout-erzwungenen Rundenwechseln
                 });
 
                 // Spielende-Logik
@@ -324,7 +332,10 @@ export function initializeSocketIO(io: Server) {
                     gameRooms.delete(gameId);
                 }
                 
-                callback?.({ success: true });
+                callback?.({ 
+                    success: true,
+                    bothAnswered: true // Wir behandeln es, als hätten beide geantwortet
+                });
             } catch (error: any) {
                 console.error(`Error in answer_timeout for game ${gameId}:`, error);
                 callback?.({ error: error.message || 'Fehler beim Verarbeiten des Timeouts.' });

@@ -1,22 +1,19 @@
-// frontend/pages/game/[gameId].tsx
-import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState, useCallback } from 'react';
+import Head from 'next/head';
 import { useAuth } from '../../contexts/AuthContext';
 import { useSocket } from '../../contexts/SocketContext';
-import { useRequireAuth } from '../../hooks/useRequireAuth';
-import apiClient from '../../lib/apiClient';
-import { Game, Question, User, RoundResultPayload, GameStartedPayload, ApiResponse } from '../../types'; // GameStatus als Typ ist hier OK
+import { AlertTriangle, CheckCircle, Trophy, Swords, XCircle } from 'lucide-react';
+import Button from '../../components/ui/Button';
+import Spinner from '../../components/ui/Spinner';
 import QuestionDisplay from '../../components/game/QuestionDisplay';
 import GameStatusDisplay from '../../components/game/GameStatusDisplay';
 import TimerDisplay from '../../components/game/TimerDisplay';
-import Button from '../../components/ui/Button';
-import Spinner from '../../components/ui/Spinner';
+import { Game, Question, RoundResultPayload, GameStartedPayload, User } from '../../types';
+import apiClient from '../../lib/apiClient';
 import toast from 'react-hot-toast';
-import { AlertTriangle, CheckCircle, XCircle, LogOut, Flag, Swords, Trophy } from 'lucide-react'; // Icons hinzugefügt
 
 const GamePage = () => {
-  useRequireAuth();
   const router = useRouter();
   const { gameId } = router.query as { gameId: string };
 
@@ -26,7 +23,6 @@ const GamePage = () => {
   const [game, setGame] = useState<Game | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [currentRoundNumber, setCurrentRoundNumber] = useState(0);
-  // const [questionsInGame, setQuestionsInGame] = useState<Question[]>([]); // Wird jetzt aus game.rounds abgeleitet
   
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,28 +31,33 @@ const GamePage = () => {
   const [hasAnsweredThisRound, setHasAnsweredThisRound] = useState(false);
   const [showRoundResult, setShowRoundResult] = useState(false);
   const [lastRoundResult, setLastRoundResult] = useState<RoundResultPayload | null>(null);
-
-  const [isTimerRunning, setIsTimerRunning] = useState(false);
-  const [timerKey, setTimerKey] = useState(0);
-  const [timeLimit, setTimeLimit] = useState(15);
-
+  
   const [opponent, setOpponent] = useState<Partial<User> | null>(null);
-
+  const [timeLimit, setTimeLimit] = useState(15); // Default, wird von Server überschrieben
+  const [timerKey, setTimerKey] = useState(0); // Key zum Reset des Timers
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
 
   const fetchGameDetails = useCallback(async () => {
-    if (!gameId || !currentUser) return;
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await apiClient.get<ApiResponse<{ game: Game }>>(`/games/${gameId}`);
-      if (response.data.status === 'success' && response.data.data?.game) {
-        const fetchedGame = response.data.data.game;
+      if (!gameId || !currentUser) return;
+
+      try {
+        setIsLoading(true);
+        // Ändere den axios-Aufruf zu apiClient
+        const response = await apiClient.get(`/games/${gameId}`);
+        if (response.data.status === 'success') {
+          const fetchedGame = response.data.data.game as Game;
+
         setGame(fetchedGame);
         
-        if (fetchedGame.player1Id === currentUser.id) setOpponent(fetchedGame.player2 ?? null);
-        else setOpponent(fetchedGame.player1 ?? null);
+        // Gegner bestimmen
+        if (fetchedGame.player1Id === currentUser.id) {
+          setOpponent(fetchedGame.player2 ?? null);
+        } else {
+          setOpponent(fetchedGame.player1 ?? null);
+        }
 
-        if (fetchedGame.status === 'ACTIVE' || fetchedGame.status === 'ROUND_ENDED') {
+        // Aktuelle Frage basierend auf dem Spielstatus setzen
+        if (fetchedGame.status === 'ACTIVE') {
             const currentQIdx = fetchedGame.currentQuestionIdx;
             const currentRnd = fetchedGame.rounds.find(r => r.roundNumber === currentQIdx + 1);
             if (currentRnd) {
@@ -105,7 +106,8 @@ const GamePage = () => {
             setCurrentQuestion(currentRnd.question);
             setCurrentRoundNumber(currentRnd.roundNumber);
         }
-        
+
+        // UI-Zustand zurücksetzen
         setSelectedOption(null);
         setHasAnsweredThisRound(false);
         setShowRoundResult(false);
@@ -118,46 +120,52 @@ const GamePage = () => {
         else setOpponent(data.game.player1 ?? null);
     };
 
-    const handleRoundResult = (data: RoundResultPayload) => {
-      if (data.gameId !== gameId) return;
-      
-      // Timer immer stoppen, wenn ein Rundenergebnis eintrifft
-      setIsTimerRunning(false);
-      
-      // Anzeige des Rundenergebnisses
-      setLastRoundResult(data);
-      setShowRoundResult(true);
-      
-      // Zur nächsten Frage fortschreiten, wenn verfügbar
-      if (data.nextQuestion && data.gameStatus === 'ACTIVE') {
-        // Nach kurzer Verzögerung zur nächsten Frage wechseln
-        setTimeout(() => {
-          setCurrentQuestion(data.nextQuestion!);
-          setCurrentRoundNumber(prev => prev + 1);
-          setSelectedOption(null);
-          setHasAnsweredThisRound(false);
-          setShowRoundResult(false);
-          setLastRoundResult(null);
-          setTimerKey(prev => prev + 1); // Timer neustarten
-          setIsTimerRunning(true);       // Timer aktivieren
-        }, 3000); // 3 Sekunden Wartezeit, damit Spieler das Ergebnis sehen können
-      }
-      
-      // Spielstatus und Punkte aktualisieren
-      setGame(prevGame => {
-        if (!prevGame) return null;
-        return {
-          ...prevGame,
-          player1Score: data.player1CurrentScore,
-          player2Score: data.player2CurrentScore,
-          status: data.gameStatus,
-          currentQuestionIdx: data.nextQuestion ? prevGame.currentQuestionIdx + 1 : prevGame.currentQuestionIdx,
-        };
-      });
-      
-      // Der aktuelle Spieler hat in dieser Runde auf jeden Fall geantwortet
-      // (entweder mit einer Antwort oder durch Timeout)
-      setHasAnsweredThisRound(true);
+      const handleRoundResult = (data: RoundResultPayload & { forcedByTimeout?: boolean }) => {
+        if (data.gameId !== gameId) return;
+        
+        // Nur den Rundenresult-Status setzen
+        setLastRoundResult(data);
+        
+        // Prüfen, ob beide Spieler geantwortet haben ODER ein Timeout den Rundenwechsel erzwungen hat
+        const bothAnswered = data.player1Answer !== null && data.player2Answer !== null;
+        const forceProgress = data.forcedByTimeout === true;
+        
+        if (bothAnswered || forceProgress) {
+            // Timer stoppen und Antwortmöglichkeiten deaktivieren
+            setIsTimerRunning(false);
+            setShowRoundResult(true);
+            
+            // Zur nächsten Frage fortschreiten, wenn verfügbar
+            if (data.nextQuestion && data.gameStatus === 'ACTIVE') {
+                // Nach kurzer Verzögerung zur nächsten Frage wechseln
+                setTimeout(() => {
+                    setCurrentQuestion(data.nextQuestion!);
+                    setCurrentRoundNumber(prev => prev + 1);
+                    setSelectedOption(null);
+                    setHasAnsweredThisRound(false);
+                    setShowRoundResult(false);
+                    setLastRoundResult(null);
+                    setTimerKey(prev => prev + 1); // Timer neustarten
+                    setIsTimerRunning(true);       // Timer aktivieren
+                }, 3000); // 3 Sekunden Wartezeit, damit Spieler das Ergebnis sehen können
+            }
+        }
+        
+        // Spielstatus und Punkte aktualisieren
+        setGame(prevGame => {
+            if (!prevGame) return null;
+            return {
+                ...prevGame,
+                player1Score: data.player1CurrentScore,
+                player2Score: data.player2CurrentScore,
+                status: data.gameStatus,
+                currentQuestionIdx: data.nextQuestion ? prevGame.currentQuestionIdx + 1 : prevGame.currentQuestionIdx,
+            };
+        });
+        
+        // Der aktuelle Spieler hat in dieser Runde auf jeden Fall geantwortet
+        // (entweder mit einer Antwort oder durch Timeout)
+        setHasAnsweredThisRound(true);
     };
 
     const handleGameOver = (finishedGame: Game) => {
@@ -219,11 +227,16 @@ const GamePage = () => {
       gameId: game.id,
       roundNumber: currentRoundNumber,
       selectedOption: selectedOpt,
-    }, (response: { success?: boolean; error?: string; currentScore?: number }) => {
+    }, (response: { success?: boolean; error?: string; currentScore?: number; bothAnswered?: boolean }) => {
       if (response.error) {
         toast.error(response.error);
         setHasAnsweredThisRound(false);
         setSelectedOption(null);
+      } 
+      
+      // Nur wenn beide geantwortet haben, Ergebnis anzeigen
+      if (response.bothAnswered) {
+        setShowRoundResult(true);
       }
     });
   };
@@ -240,9 +253,14 @@ const GamePage = () => {
           gameId: game.id,
           roundNumber: currentRoundNumber,
         },
-        (response: { error?: string }) => {
+        (response: { error?: string; bothAnswered?: boolean }) => {
           if (response.error) {
             console.error("Timeout error:", response.error);
+          }
+          
+          // Nur wenn beide geantwortet haben, Ergebnis anzeigen
+          if (response.bothAnswered) {
+            setShowRoundResult(true);
           }
         }
       );
@@ -260,6 +278,7 @@ const GamePage = () => {
 
   if (isLoading) return <div className="main-container text-center py-20"><Spinner size="lg" /><p className="mt-4 text-textSecondary">Lade Spiel...</p></div>;
   if (error) return <div className="main-container text-center py-20 card bg-red-50"><AlertTriangle size={48} className="text-red-500 mx-auto mb-4" /><p className="text-red-700">{error}</p><Button onClick={() => router.push('/game')} className="mt-6">Zurück zur Lobby</Button></div>;
+
   if (!game || !currentUser) return <div className="main-container text-center py-20"><p>Spiel nicht gefunden oder Initialisierung fehlgeschlagen.</p><Button onClick={() => router.push('/game')} className="mt-6">Zurück zur Lobby</Button></div>;
 
   const totalQuestions = game.rounds.length;
@@ -338,8 +357,8 @@ const GamePage = () => {
         
         {!gameIsOver && (
             <div className="mt-8 text-center">
-                <Button onClick={handleLeaveGame} variant="danger" size="sm" leftIcon={<Flag size={16}/>}>
-                    Spiel aufgeben
+                <Button onClick={handleLeaveGame} variant="danger" className="ml-auto">
+                    Spiel verlassen
                 </Button>
             </div>
         )}
