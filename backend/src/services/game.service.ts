@@ -1,11 +1,10 @@
-// backend/src/services/game.service.ts
-import { PrismaClient, Game, Question, User } from '@prisma/client';
+import { PrismaClient, Game, Question } from '@prisma/client';
 import { GameStatus } from '../types/enums';
 import { AppError } from '../utils/AppError';
-import { getRandomQuestionsService } from './question.service'; // Import hinzugefügt
+import { getRandomQuestionsService } from './question.service';
 
 const prisma = new PrismaClient();
-const QUESTIONS_PER_GAME = 5; // Anzahl der Fragen pro Spiel
+const QUESTIONS_PER_GAME = 5;
 
 interface CreateGameInput {
     player1Id: string;
@@ -18,18 +17,17 @@ interface JoinGameInput {
 
 export const createGameService = async (input: CreateGameInput): Promise<Game> => {
     const { player1Id } = input;
-    // Prüfen, ob der Spieler bereits ein offenes Spiel hat (optional)
-    // const existingGame = await prisma.game.findFirst({
-    //   where: { player1Id, status: GameStatus.PENDING }
-    // });
-    // if (existingGame) throw new AppError('Du hast bereits ein offenes Spiel.', 400);
-
     return prisma.game.create({
         data: {
             player1Id,
             status: GameStatus.PENDING,
+            player1Score: 0,
+            player2Score: 0,
+            currentQuestionIdx: 0,
         },
-        include: { player1: { select: { id: true, name: true, uniHandle: true } } },
+        include: {
+            player1: { select: { id: true, name: true, uniHandle: true } },
+        }
     });
 };
 
@@ -37,35 +35,38 @@ export const findOpenGameService = async (excludePlayerId: string): Promise<Game
     return prisma.game.findFirst({
         where: {
             status: GameStatus.PENDING,
-            player1Id: { not: excludePlayerId }, // Nicht das eigene Spiel beitreten
-            player2Id: null, // Sicherstellen, dass noch kein zweiter Spieler da ist
+            player1Id: { not: excludePlayerId },
+            player2Id: null,
         },
         include: { player1: { select: { id: true, name: true, uniHandle: true } } },
-        orderBy: { createdAt: 'asc' }, // Ältestes offenes Spiel zuerst
+        orderBy: { createdAt: 'asc' },
     });
 };
 
 export const joinGameService = async (input: JoinGameInput): Promise<Game & { questions: Question[] }> => {
     const { gameId, player2Id } = input;
-    const game = await prisma.game.findUnique({ where: { id: gameId } });
 
-    if (!game) {
-        throw new AppError('Spiel nicht gefunden.', 404);
-    }
-    if (game.status !== GameStatus.PENDING) {
-        throw new AppError('Spiel ist nicht mehr offen zum Beitreten.', 400);
-    }
-    if (game.player1Id === player2Id) {
-        throw new AppError('Du kannst nicht deinem eigenen Spiel beitreten.', 400);
-    }
-    if (game.player2Id) {
-        throw new AppError('Dieses Spiel hat bereits einen zweiten Spieler.', 400);
+    // Lade das Spiel und prüfe, ob es noch offen ist
+    const game = await prisma.game.findUnique({
+        where: { id: gameId },
+        include: {
+            rounds: { include: { question: true }, orderBy: { roundNumber: 'asc' } }
+        }
+    });
+
+    if (!game || game.status !== GameStatus.PENDING || game.player2Id) {
+        throw new AppError('Spiel nicht mehr verfügbar.', 400);
     }
 
-    const questionsForGame = await getRandomQuestionsService(QUESTIONS_PER_GAME);
+    // Hole Fragen, falls noch keine Runden existieren
+    let questionsForGame: Question[] = [];
+    if (game.rounds.length === 0) {
+        questionsForGame = await getRandomQuestionsService(QUESTIONS_PER_GAME);
+    } else {
+        questionsForGame = game.rounds.map(r => r.question);
+    }
+
     if (questionsForGame.length < QUESTIONS_PER_GAME) {
-        // Nicht genügend Fragen in der DB. Man könnte das Spiel abbrechen oder mit weniger Fragen starten.
-        // Hier brechen wir ab, um Konsistenz zu wahren.
         await prisma.game.update({ where: {id: gameId}, data: { status: GameStatus.CANCELLED }});
         throw new AppError(`Nicht genügend Fragen (${questionsForGame.length}/${QUESTIONS_PER_GAME}) für ein neues Spiel verfügbar. Bitte Admin kontaktieren.`, 503);
     }
@@ -75,22 +76,22 @@ export const joinGameService = async (input: JoinGameInput): Promise<Game & { qu
         data: {
             player2Id,
             status: GameStatus.ACTIVE,
-            currentQuestionIdx: 0, // Spiel startet mit der ersten Frage
-            // Erstelle die GameRounds für dieses Spiel
-            rounds: {
+            currentQuestionIdx: 0,
+            rounds: game.rounds.length === 0 ? {
                 create: questionsForGame.map((q: Question, index: number) => ({
                     questionId: q.id,
                     roundNumber: index + 1,
                 })),
-            }
+            } : undefined
         },
         include: {
             player1: { select: { id: true, name: true, uniHandle: true } },
-            player2: { select: { id: true, name: true, uniHandle: true } },
-            rounds: { include: { question: true }, orderBy: { roundNumber: 'asc'} }, // Runden mit Fragen laden
-        },
+            player2: { select: { id: true, name: true, uniHandle: true } }, // <-- WICHTIG: Beide Spieler mitladen!
+            rounds: { include: { question: true }, orderBy: { roundNumber: 'asc' } }
+        }
     });
-    // @ts-ignore // Prisma Typen sind manchmal knifflig mit includes
+
+    // @ts-ignore
     return { ...updatedGame, questions: updatedGame.rounds.map(r => r.question) };
 };
 
@@ -114,10 +115,19 @@ export const getGameDetailsService = async (gameId: string, userId: string): Pro
     });
 
     if (!game) return null;
-    // Sicherheitscheck: Nur Spieler des Spiels dürfen Details sehen (oder Admins)
-    // if (game.player1Id !== userId && game.player2Id !== userId /* && req.user.role !== 'ADMIN' */) {
-    //     throw new AppError('Du bist nicht Teil dieses Spiels.', 403);
-    // }
+    
+    // NEUE LOGIK: Wenn der anfragende User Spieler 2 ist, tausche die Spieler für die Ansicht
+    if (game.player2Id === userId) {
+        // Use type assertion to tell TypeScript this is the correct structure
+        return {
+            ...game,
+            player1Id: game.player2Id,
+            player2Id: game.player1Id,
+            player1: game.player2,
+            player2: game.player1
+        } as typeof game;
+    }
+    
     return game;
 };
 

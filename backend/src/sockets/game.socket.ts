@@ -134,6 +134,7 @@ export function initializeSocketIO(io: Server) {
             }
         });
 
+        // ...existing code...
         socket.on('find_game', async (callback) => {
             if (!socket.data.userId) {
                 return callback({ error: 'Nicht authentifiziert.' });
@@ -184,23 +185,65 @@ export function initializeSocketIO(io: Server) {
                         
                         socket.join(game.id);
                         addSocketToGameRoom(game.id, socket.id);
-                        
-                        // Benachrichtige Spieler 1
+
+                        // Spieler 1 (Ersteller)
                         const player1SocketId = userSockets.get(game.player1Id);
                         if (player1SocketId) {
-                            const opponentUser = await prisma.user.findUnique({ where: { id: socket.data.userId } });
+                            // Für Player 1 bleibt alles beim alten
+                            const gameForPlayer1 = {
+                                ...joinedGameData
+                            };
+                            
+                            // Den aktuellen Spieler (player2) vollständig laden
+                            const opponentUser = await prisma.user.findUnique({
+                                where: { id: socket.data.userId },
+                                select: { id: true, name: true, uniHandle: true }
+                            });
                             io.to(player1SocketId).emit('player_joined', { 
-                                game, 
-                                opponent: { id: socket.data.userId, name: opponentUser?.name } 
+                                game: gameForPlayer1,
+                                opponent: opponentUser
+                            });
+                            io.to(player1SocketId).emit('game_started', { 
+                                game: gameForPlayer1, 
+                                questions,
+                                timeLimit: QUESTION_TIME_LIMIT_SECONDS 
                             });
                         }
                         
-                        // Game Start Event an beide
-                        io.to(game.id).emit('game_started', { 
-                            game: joinedGameData, 
-                            questions,
-                            timeLimit: QUESTION_TIME_LIMIT_SECONDS 
-                        });
+                        // Spieler 2 (Beitretender)
+                        const player2SocketId = userSockets.get(socket.data.userId);
+                        if (player2SocketId) {
+                            // Für Player 2 müssen wir eine neue Ansicht erstellen
+                            // Hole Daten für beide Spieler
+                            const player1User = await prisma.user.findUnique({
+                                where: { id: game.player1Id },
+                                select: { id: true, name: true, uniHandle: true }
+                            });
+                            
+                            const player2User = await prisma.user.findUnique({
+                                where: { id: socket.data.userId },
+                                select: { id: true, name: true, uniHandle: true }
+                            });
+                            
+                            // Erstelle eine neue Ansicht für Spieler 2, bei der die Spieler getauscht sind
+                            const gameForPlayer2 = {
+                                ...joinedGameData,
+                                player1Id: joinedGameData.player2Id,
+                                player2Id: joinedGameData.player1Id,
+                                player1: player2User,  // Player2 wird zu Player1 für die Ansicht
+                                player2: player1User   // Player1 wird zu Player2 für die Ansicht
+                            };
+                            
+                            io.to(player2SocketId).emit('player_joined', { 
+                                game: gameForPlayer2,
+                                opponent: player1User
+                            });
+                            io.to(player2SocketId).emit('game_started', { 
+                                game: gameForPlayer2, 
+                                questions,
+                                timeLimit: QUESTION_TIME_LIMIT_SECONDS 
+                            });
+                        }
                         
                         // Entferne beide aus aktiveSeekers nach dem Match
                         activeSeekers.delete(socket.data.userId);

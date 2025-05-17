@@ -23,55 +23,62 @@ const GamePage = () => {
   const [game, setGame] = useState<Game | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<Question | null>(null);
   const [currentRoundNumber, setCurrentRoundNumber] = useState(0);
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [hasAnsweredThisRound, setHasAnsweredThisRound] = useState(false);
   const [showRoundResult, setShowRoundResult] = useState(false);
   const [lastRoundResult, setLastRoundResult] = useState<RoundResultPayload | null>(null);
-  
+
   const [opponent, setOpponent] = useState<Partial<User> | null>(null);
   const [timeLimit, setTimeLimit] = useState(15); // Default, wird von Server überschrieben
   const [timerKey, setTimerKey] = useState(0); // Key zum Reset des Timers
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
-  const fetchGameDetails = useCallback(async () => {
-      if (!gameId || !currentUser) return;
+  // --- Helper to always set the correct opponent ---
+  const determineOpponent = useCallback(
+    (gameObj: Game | null, userId: string | undefined | null) => {
+      if (!gameObj || !userId) return null;
+      if (gameObj.player1Id === userId) {
+        return gameObj.player2 ?? null;
+      } else if (gameObj.player2Id === userId) {
+        return gameObj.player1 ?? null;
+      }
+      return null;
+    },
+    []
+  );
 
-      try {
-        setIsLoading(true);
-        // Ändere den axios-Aufruf zu apiClient
-        const response = await apiClient.get(`/games/${gameId}`);
-        if (response.data.status === 'success') {
-          const fetchedGame = response.data.data.game as Game;
+  const fetchGameDetails = useCallback(async () => {
+    if (!gameId || !currentUser) return;
+
+    try {
+      setIsLoading(true);
+      const response = await apiClient.get(`/games/${gameId}`);
+      if (response.data.status === 'success') {
+        const fetchedGame = response.data.data.game as Game;
 
         setGame(fetchedGame);
-        
-        // Gegner bestimmen
-        if (fetchedGame.player1Id === currentUser.id) {
-          setOpponent(fetchedGame.player2 ?? null);
-        } else {
-          setOpponent(fetchedGame.player1 ?? null);
-        }
+
+        setOpponent(determineOpponent(fetchedGame, currentUser.id));
 
         // Aktuelle Frage basierend auf dem Spielstatus setzen
         if (fetchedGame.status === 'ACTIVE') {
-            const currentQIdx = fetchedGame.currentQuestionIdx;
-            const currentRnd = fetchedGame.rounds.find(r => r.roundNumber === currentQIdx + 1);
-            if (currentRnd) {
-                setCurrentQuestion(currentRnd.question);
-                setCurrentRoundNumber(currentRnd.roundNumber);
-                setTimerKey(prev => prev + 1);
-                setIsTimerRunning(true);
-            } else if (fetchedGame.rounds.length > 0 && currentQIdx >= fetchedGame.rounds.length) {
-                console.warn("Game active but currentQuestionIdx is out of bounds. Setting game to FINISHED.");
-                setGame(g => g ? {...g, status: 'FINISHED'} : null);
-                setIsTimerRunning(false);
-            }
-        } else if (fetchedGame.status === 'FINISHED' || fetchedGame.status === 'CANCELLED') {
+          const currentQIdx = fetchedGame.currentQuestionIdx;
+          const currentRnd = fetchedGame.rounds.find(r => r.roundNumber === currentQIdx + 1);
+          if (currentRnd) {
+            setCurrentQuestion(currentRnd.question);
+            setCurrentRoundNumber(currentRnd.roundNumber);
+            setTimerKey(prev => prev + 1);
+            setIsTimerRunning(true);
+          } else if (fetchedGame.rounds.length > 0 && currentQIdx >= fetchedGame.rounds.length) {
+            setGame(g => g ? { ...g, status: 'FINISHED' } : null);
             setIsTimerRunning(false);
+          }
+        } else if (fetchedGame.status === 'FINISHED' || fetchedGame.status === 'CANCELLED') {
+          setIsTimerRunning(false);
         }
       } else {
         throw new Error(response.data.message || 'Spieldetails konnten nicht geladen werden.');
@@ -83,7 +90,7 @@ const GamePage = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [gameId, currentUser]);
+  }, [gameId, currentUser, determineOpponent]);
 
   useEffect(() => {
     if (gameId && currentUser) {
@@ -91,81 +98,71 @@ const GamePage = () => {
     }
   }, [gameId, currentUser, fetchGameDetails]);
 
-
   useEffect(() => {
     if (!socket || !isConnected || !gameId || !currentUser) return;
 
     const handleGameStarted = (data: GameStartedPayload) => {
-        if (data.game.id !== gameId) return;
-        setGame(data.game);
-        setTimeLimit(data.timeLimit);
+      if (data.game.id !== gameId) return;
 
-        const currentQIdx = data.game.currentQuestionIdx;
-        const currentRnd = data.game.rounds.find(r => r.roundNumber === currentQIdx + 1);
-        if (currentRnd) {
-            setCurrentQuestion(currentRnd.question);
-            setCurrentRoundNumber(currentRnd.roundNumber);
-        }
+      setGame(data.game);
+      setTimeLimit(data.timeLimit);
 
-        // UI-Zustand zurücksetzen
-        setSelectedOption(null);
-        setHasAnsweredThisRound(false);
-        setShowRoundResult(false);
-        setTimerKey(prev => prev + 1);
-        setIsTimerRunning(true);
-        setIsLoading(false);
-        setError(null);
+      const currentQIdx = data.game.currentQuestionIdx;
+      const currentRnd = data.game.rounds.find(r => r.roundNumber === currentQIdx + 1);
+      if (currentRnd) {
+        setCurrentQuestion(currentRnd.question);
+        setCurrentRoundNumber(currentRnd.roundNumber);
+      }
 
-        if (data.game.player1Id === currentUser.id) setOpponent(data.game.player2 ?? null);
-        else setOpponent(data.game.player1 ?? null);
+      setOpponent(determineOpponent(data.game, currentUser.id));
+
+      setSelectedOption(null);
+      setHasAnsweredThisRound(false);
+      setShowRoundResult(false);
+      setTimerKey(prev => prev + 1);
+      setIsTimerRunning(true);
+      setIsLoading(false);
+      setError(null);
     };
 
-      const handleRoundResult = (data: RoundResultPayload & { forcedByTimeout?: boolean }) => {
-        if (data.gameId !== gameId) return;
-        
-        // Nur den Rundenresult-Status setzen
-        setLastRoundResult(data);
-        
-        // Prüfen, ob beide Spieler geantwortet haben ODER ein Timeout den Rundenwechsel erzwungen hat
-        const bothAnswered = data.player1Answer !== null && data.player2Answer !== null;
-        const forceProgress = data.forcedByTimeout === true;
-        
-        if (bothAnswered || forceProgress) {
-            // Timer stoppen und Antwortmöglichkeiten deaktivieren
-            setIsTimerRunning(false);
-            setShowRoundResult(true);
-            
-            // Zur nächsten Frage fortschreiten, wenn verfügbar
-            if (data.nextQuestion && data.gameStatus === 'ACTIVE') {
-                // Nach kurzer Verzögerung zur nächsten Frage wechseln
-                setTimeout(() => {
-                    setCurrentQuestion(data.nextQuestion!);
-                    setCurrentRoundNumber(prev => prev + 1);
-                    setSelectedOption(null);
-                    setHasAnsweredThisRound(false);
-                    setShowRoundResult(false);
-                    setLastRoundResult(null);
-                    setTimerKey(prev => prev + 1); // Timer neustarten
-                    setIsTimerRunning(true);       // Timer aktivieren
-                }, 3000); // 3 Sekunden Wartezeit, damit Spieler das Ergebnis sehen können
-            }
+    const handleRoundResult = (data: RoundResultPayload & { forcedByTimeout?: boolean }) => {
+      if (data.gameId !== gameId) return;
+
+      setLastRoundResult(data);
+
+      const bothAnswered = data.player1Answer !== null && data.player2Answer !== null;
+      const forceProgress = data.forcedByTimeout === true;
+
+      if (bothAnswered || forceProgress) {
+        setIsTimerRunning(false);
+        setShowRoundResult(true);
+
+        if (data.nextQuestion && data.gameStatus === 'ACTIVE') {
+          setTimeout(() => {
+            setCurrentQuestion(data.nextQuestion!);
+            setCurrentRoundNumber(prev => prev + 1);
+            setSelectedOption(null);
+            setHasAnsweredThisRound(false);
+            setShowRoundResult(false);
+            setLastRoundResult(null);
+            setTimerKey(prev => prev + 1);
+            setIsTimerRunning(true);
+          }, 3000);
         }
-        
-        // Spielstatus und Punkte aktualisieren
-        setGame(prevGame => {
-            if (!prevGame) return null;
-            return {
-                ...prevGame,
-                player1Score: data.player1CurrentScore,
-                player2Score: data.player2CurrentScore,
-                status: data.gameStatus,
-                currentQuestionIdx: data.nextQuestion ? prevGame.currentQuestionIdx + 1 : prevGame.currentQuestionIdx,
-            };
-        });
-        
-        // Der aktuelle Spieler hat in dieser Runde auf jeden Fall geantwortet
-        // (entweder mit einer Antwort oder durch Timeout)
-        setHasAnsweredThisRound(true);
+      }
+
+      setGame(prevGame => {
+        if (!prevGame) return null;
+        return {
+          ...prevGame,
+          player1Score: data.player1CurrentScore,
+          player2Score: data.player2CurrentScore,
+          status: data.gameStatus,
+          currentQuestionIdx: data.nextQuestion ? prevGame.currentQuestionIdx + 1 : prevGame.currentQuestionIdx,
+        };
+      });
+
+      setHasAnsweredThisRound(true);
     };
 
     const handleGameOver = (finishedGame: Game) => {
@@ -175,26 +172,25 @@ const GamePage = () => {
       setShowRoundResult(false);
       toast.success('Spiel beendet!', { duration: 4000 });
     };
-    
+
     const handleOpponentAnswered = (data: { playerId: string }) => {
-        if (data.playerId !== currentUser?.id) {
-            toast(`${opponent?.name || 'Gegner'} hat geantwortet.`, { duration: 1500, icon: '🤫' });
-        }
+      if (data.playerId !== currentUser?.id) {
+        toast(`${opponent?.name || 'Gegner'} hat geantwortet.`, { duration: 1500, icon: '🤫' });
+      }
     };
 
     const handleOpponentLeftOrForfeited = (data: { gameId: string, leaverId?: string, forfeitedPlayerId?: string, winnerId?: string }) => {
-        if (data.gameId !== gameId) return;
-        const leaverName = opponent?.name || 'Gegner';
-        toast.error(`${leaverName} hat das Spiel verlassen.`, { duration: 4000 });
-        setGame(prev => prev ? {...prev, status: 'CANCELLED', winnerId: data.winnerId} : null);
-        setIsTimerRunning(false);
+      if (data.gameId !== gameId) return;
+      const leaverName = opponent?.name || 'Gegner';
+      toast.error(`${leaverName} hat das Spiel verlassen.`, { duration: 4000 });
+      setGame(prev => prev ? { ...prev, status: 'CANCELLED', winnerId: data.winnerId } : null);
+      setIsTimerRunning(false);
     };
-    
+
     const handleGameUpdate = (updatedGame: Game) => {
-        if (updatedGame.id !== gameId) return;
-        setGame(updatedGame);
-        if (updatedGame.player1Id === currentUser.id) setOpponent(updatedGame.player2 ?? null);
-        else setOpponent(updatedGame.player1 ?? null);
+      if (updatedGame.id !== gameId) return;
+      setGame(updatedGame);
+      setOpponent(determineOpponent(updatedGame, currentUser?.id));
     };
 
     socket.on('game_started', handleGameStarted);
@@ -214,8 +210,7 @@ const GamePage = () => {
       socket.off('opponent_forfeited', handleOpponentLeftOrForfeited);
       socket.off('game_updated', handleGameUpdate);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [socket, isConnected, gameId, currentUser, opponent?.name]); // opponent?.name hinzugefügt, um Toast aktuell zu halten
+  }, [socket, isConnected, gameId, currentUser, opponent?.name, determineOpponent]);
 
   const handleAnswer = (selectedOpt: 'A' | 'B' | 'C' | 'D') => {
     if (!socket || !game || hasAnsweredThisRound || showRoundResult || game.status !== 'ACTIVE') return;
@@ -232,9 +227,8 @@ const GamePage = () => {
         toast.error(response.error);
         setHasAnsweredThisRound(false);
         setSelectedOption(null);
-      } 
-      
-      // Nur wenn beide geantwortet haben, Ergebnis anzeigen
+      }
+
       if (response.bothAnswered) {
         setShowRoundResult(true);
       }
@@ -244,9 +238,8 @@ const GamePage = () => {
   const handleTimeout = useCallback(() => {
     if (!hasAnsweredThisRound && game && game.status === 'ACTIVE') {
       toast.error('Zeit abgelaufen!', { icon: '⏳' });
-      setHasAnsweredThisRound(true); 
-      
-      // Socket-Event senden bei Timeout
+      setHasAnsweredThisRound(true);
+
       socket?.emit(
         'answer_timeout',
         {
@@ -257,8 +250,7 @@ const GamePage = () => {
           if (response.error) {
             console.error("Timeout error:", response.error);
           }
-          
-          // Nur wenn beide geantwortet haben, Ergebnis anzeigen
+
           if (response.bothAnswered) {
             setShowRoundResult(true);
           }
@@ -269,10 +261,10 @@ const GamePage = () => {
 
   const handleLeaveGame = () => {
     if (socket && game) {
-        if (confirm("Möchtest du das Spiel wirklich verlassen? Dein Gegner gewinnt dadurch (falls vorhanden).")) {
-            socket.emit('leave_game', { gameId: game.id });
-            router.push('/game');
-        }
+      if (confirm("Möchtest du das Spiel wirklich verlassen? Dein Gegner gewinnt dadurch (falls vorhanden).")) {
+        socket.emit('leave_game', { gameId: game.id });
+        router.push('/game');
+      }
     }
   };
 
@@ -287,7 +279,7 @@ const GamePage = () => {
   return (
     <>
       <Head>
-        <title>QuizDuell: {game.player1?.name || 'Spieler 1'} vs {game.player2?.name || 'Spieler 2'}</title>
+        <title>QuizDuell: {game.player1?.name || 'Spieler 1'} vs {opponent?.name || game.player2?.name || 'Spieler 2'}</title>
       </Head>
       <div className="main-container">
         <GameStatusDisplay game={game} currentUser={currentUser} opponent={opponent} />
@@ -296,7 +288,7 @@ const GamePage = () => {
           <div className="card text-center py-10 animate-fadeIn">
             <h2 className="text-3xl font-bold mb-6">Spiel beendet!</h2>
             {game.status === 'CANCELLED' && (
-                <p className="text-xl text-accent mb-4">Das Spiel wurde abgebrochen.</p>
+              <p className="text-xl text-accent mb-4">Das Spiel wurde abgebrochen.</p>
             )}
             {game.winnerId ? (
               <p className="text-2xl text-secondary mb-2">
@@ -339,7 +331,7 @@ const GamePage = () => {
                 <h3 className="text-xl font-semibold mb-3 text-primary">Ergebnis Runde {lastRoundResult.roundNumber}</h3>
                 { (currentUser?.id === game.player1Id && lastRoundResult.player1Correct) || (currentUser?.id === game.player2Id && lastRoundResult.player2Correct) ? (
                     <p className="text-green-600 font-bold flex items-center justify-center"><CheckCircle className="mr-2"/> Deine Antwort war richtig!</p>
-                ) : ( (currentUser?.id === game.player1Id && lastRoundResult.player1Answer) || (currentUser?.id === game.player2Id && lastRoundResult.player2Answer) ) ? ( // Nur anzeigen, wenn man geantwortet hat
+                ) : ( (currentUser?.id === game.player1Id && lastRoundResult.player1Answer) || (currentUser?.id === game.player2Id && lastRoundResult.player2Answer) ) ? (
                     <p className="text-red-600 font-bold flex items-center justify-center"><XCircle className="mr-2"/> Deine Antwort war falsch.</p>
                 ) : (
                     <p className="text-textSecondary font-medium">Du hast nicht (rechtzeitig) geantwortet.</p>
@@ -354,13 +346,13 @@ const GamePage = () => {
             <p className="mt-3 text-textSecondary">Warte auf nächste Frage oder Spielstart...</p>
           </div>
         )}
-        
+
         {!gameIsOver && (
-            <div className="mt-8 text-center">
-                <Button onClick={handleLeaveGame} variant="danger" className="ml-auto">
-                    Spiel verlassen
-                </Button>
-            </div>
+          <div className="mt-8 text-center">
+            <Button onClick={handleLeaveGame} variant="danger" className="ml-auto">
+              Spiel verlassen
+            </Button>
+          </div>
         )}
       </div>
     </>
