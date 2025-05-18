@@ -318,12 +318,14 @@ const GamePage = () => {
               isRunning={isTimerRunning && !showRoundResult && !hasAnsweredThisRound}
             />
             <QuestionDisplay
+              // Aktualisiere die Anzeige der Quelleninformationen im Bereich nach Zeile 320
               question={currentQuestion}
               onAnswer={handleAnswer}
               disabledOptions={hasAnsweredThisRound || showRoundResult || !isTimerRunning}
               selectedOption={selectedOption}
               correctOption={showRoundResult ? lastRoundResult?.correctOption : null}
               opponentAnswer={showRoundResult ? (currentUser?.id === game.player1Id ? lastRoundResult?.player2Answer : lastRoundResult?.player1Answer) : null}
+              showSource={showRoundResult} // Zeige Quelle, wenn das Rundenergebnis angezeigt wird
             />
 
             {showRoundResult && lastRoundResult && (

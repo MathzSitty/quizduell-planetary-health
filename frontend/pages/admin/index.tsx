@@ -12,6 +12,16 @@ import toast from 'react-hot-toast';
 
 const ITEMS_PER_PAGE = 10;
 
+// Interface für die spezifische Antwort von der Fragen-API
+interface QuestionsApiResponse {
+    status: 'success' | 'error';
+    questions: Question[];
+    total: number;
+    totalPages: number;
+    currentPage: number;
+    message?: string;
+}
+
 export default function AdminPage() {
     useRequireAuth({ requireAdmin: true }); // Schützt die Seite
 
@@ -31,7 +41,8 @@ export default function AdminPage() {
         setIsLoading(true);
         setError(null);
         try {
-            const response = await apiClient.get<ApiResponse<Question[]>>(`/questions?page=${page}&limit=${ITEMS_PER_PAGE}`);
+            // Verwende das korrekte Interface für die API-Antwort
+            const response = await apiClient.get<QuestionsApiResponse>(`/questions?page=${page}&limit=${ITEMS_PER_PAGE}`);
             if (response.data.status === 'success' && response.data.questions) {
                 setQuestions(response.data.questions);
                 setTotalPages(response.data.totalPages || 1);

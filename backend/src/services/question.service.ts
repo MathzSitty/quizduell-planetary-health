@@ -1,6 +1,6 @@
 // backend/src/services/question.service.ts
 import { PrismaClient, Question } from '@prisma/client';
-import { AppError } from '../utils/AppError'; // Angenommen, AppError existiert
+import { AppError } from '../utils/AppError';
 
 const prisma = new PrismaClient();
 
@@ -12,10 +12,11 @@ interface QuestionInput {
     optionD: string;
     correctOption: string; // 'A', 'B', 'C', or 'D'
     category?: string;
+    source?: string; // Quellenfeld hinzugefügt
 }
 
 export const createQuestionService = async (input: QuestionInput, authorId: string): Promise<Question> => {
-    const { text, optionA, optionB, optionC, optionD, correctOption, category } = input;
+    const { text, optionA, optionB, optionC, optionD, correctOption, category, source } = input;
 
     if (!['A', 'B', 'C', 'D'].includes(correctOption)) {
         throw new AppError('Ungültige korrekte Option. Muss A, B, C oder D sein.', 400);
@@ -30,6 +31,7 @@ export const createQuestionService = async (input: QuestionInput, authorId: stri
             optionD,
             correctOption,
             category: category || null,
+            source: source || null, // Quelle hinzufügen
             authorId,
         },
     });
@@ -40,8 +42,8 @@ export const getAllQuestionsService = async (page = 1, limit = 10, category?: st
     const whereClause: any = {};
     if (category) {
         whereClause.category = {
-            contains: category, // oder equals, je nach Anforderung
-            mode: 'insensitive' // Groß-/Kleinschreibung ignorieren
+            contains: category,
+            mode: 'insensitive'
         };
     }
 
@@ -50,7 +52,7 @@ export const getAllQuestionsService = async (page = 1, limit = 10, category?: st
         skip,
         take: limit,
         orderBy: { createdAt: 'desc' },
-        include: { author: { select: { name: true, id: true } } }, // Autor-Infos mitladen
+        include: { author: { select: { name: true, id: true } } },
     });
     const total = await prisma.question.count({ where: whereClause });
     return {
@@ -72,8 +74,8 @@ export const updateQuestionService = async (id: string, input: Partial<QuestionI
     if (input.correctOption && !['A', 'B', 'C', 'D'].includes(input.correctOption)) {
         throw new AppError('Ungültige korrekte Option für Update.', 400);
     }
-    // Verhindere, dass authorId direkt geändert wird, falls nicht gewünscht
-    const { authorId, ...updateData } = input as any; // authorId aus input entfernen
+    // Verhindere, dass authorId direkt geändert wird
+    const { authorId, ...updateData } = input as any;
 
     return prisma.question.update({
         where: { id },
@@ -82,10 +84,32 @@ export const updateQuestionService = async (id: string, input: Partial<QuestionI
 };
 
 export const deleteQuestionService = async (id: string): Promise<Question | null> => {
-    // Prüfe, ob die Frage in aktiven Spielen verwendet wird, bevor du sie löschst (komplexer)
-    // Fürs Erste: direkt löschen
+    // 1. Zuerst prüfen, ob die Frage in aktiven Spielen verwendet wird
+    const gameRoundsWithQuestion = await prisma.gameRound.findMany({
+        where: { questionId: id },
+        include: { game: true }
+    });
+
+    const activeGames = gameRoundsWithQuestion.filter(
+        gr => gr.game.status === 'ACTIVE' || gr.game.status === 'PENDING'
+    );
+
+    // Wenn die Frage in aktiven Spielen verwendet wird, Löschung verweigern
+    if (activeGames.length > 0) {
+        throw new AppError(
+            `Diese Frage kann nicht gelöscht werden, da sie in ${activeGames.length} aktiven Spielen verwendet wird.`,
+            400
+        );
+    }
+
+    // 2. Für beendete oder abgebrochene Spiele, die GameRounds löschen
+    await prisma.gameRound.deleteMany({
+        where: { questionId: id }
+    });
+
+    // 3. Schließlich die Frage selbst löschen
     return prisma.question.delete({
-        where: { id },
+        where: { id }
     });
 };
 
@@ -97,11 +121,8 @@ export const getRandomQuestionsService = async (count: number, category?: string
 
     const allQuestionsCount = await prisma.question.count({ where: whereClause });
     if (allQuestionsCount === 0) return [];
-    if (count > allQuestionsCount) count = allQuestionsCount; // Nicht mehr anfordern als vorhanden
+    if (count > allQuestionsCount) count = allQuestionsCount;
 
-    // Einfache Methode für zufällige Fragen (nicht perfekt für große Datensätze, aber für Quiz OK)
-    // Besser wäre eine DB-spezifische RANDOM() Funktion, aber Prisma unterstützt das nicht direkt universell.
-    // Alternative: Alle IDs laden, shufflen, dann die ersten 'count' nehmen.
     const allQuestions = await prisma.question.findMany({ where: whereClause });
 
     // Fisher-Yates shuffle

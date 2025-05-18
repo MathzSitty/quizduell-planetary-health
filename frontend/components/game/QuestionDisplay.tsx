@@ -1,7 +1,7 @@
 import React from 'react';
 import { Question } from '../../types';
 import Button from '../ui/Button';
-import { CheckCircle, XCircle } from 'lucide-react';
+import { CheckCircle, XCircle, ExternalLink } from 'lucide-react';
 
 interface QuestionDisplayProps {
     question: Question;
@@ -10,6 +10,7 @@ interface QuestionDisplayProps {
     selectedOption?: string | null;
     correctOption?: string | null;
     opponentAnswer?: string | null;
+    showSource?: boolean;
 }
 
 const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
@@ -19,6 +20,7 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
     selectedOption,
     correctOption,
     opponentAnswer,
+    showSource = false,
 }) => {
     const options: Array<{ key: 'A' | 'B' | 'C' | 'D'; text: string }> = [
         { key: 'A', text: question.optionA },
@@ -78,6 +80,21 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
                     </Button>
                 ))}
             </div>
+            
+            {/* Quellenangabe-Bereich */}
+            {showSource && question.source && (
+                <div className="mt-6 pt-4 border-t border-neutral text-center">
+                    <a 
+                        href={question.source} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="inline-flex items-center text-primary hover:text-primary-dark transition-colors"
+                    >
+                        <ExternalLink size={16} className="mr-1" />
+                        Mehr Informationen (Quelle)
+                    </a>
+                </div>
+            )}
         </div>
     );
 };

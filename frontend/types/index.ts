@@ -19,6 +19,7 @@ export interface Question {
     optionD: string;
     correctOption?: string; // Wird für Spieler nicht immer gesendet
     category?: string | null;
+    source?: string | null;  // Quellenfeld hinzugefügt
     authorId?: string;
     author?: { name: string; id: string };
     createdAt?: string;
@@ -103,9 +104,4 @@ export interface ApiResponse<T = any> {
     status: 'success' | 'error';
     data?: T;
     message?: string;
-    // Für paginierte Listen
-    questions?: T; // Spezifisch für Question-Liste
-    total?: number;
-    totalPages?: number;
-    currentPage?: number;
 }

@@ -34,6 +34,7 @@ model Question {
   optionD       String
   correctOption String
   category      String?
+  source        String?  // Feld für die Quellenangabe (URL)
   authorId      String?
   author        User?    @relation("AuthoredQuestions", fields: [authorId], references: [id], onDelete: SetNull)
   createdAt     DateTime @default(now())

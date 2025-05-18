@@ -106,7 +106,16 @@ export const getGameDetailsService = async (gameId: string, userId: string): Pro
                 orderBy: { roundNumber: 'asc' },
                 include: {
                     question: { // Wähle nur die benötigten Felder der Frage
-                        select: { id: true, text: true, optionA: true, optionB: true, optionC: true, optionD: true, category: true }
+                        select: { 
+                            id: true, 
+                            text: true, 
+                            optionA: true, 
+                            optionB: true, 
+                            optionC: true, 
+                            optionD: true, 
+                            category: true,
+                            source: true // Quellenfeld hinzugefügt
+                        }
                     }
                 }
             },

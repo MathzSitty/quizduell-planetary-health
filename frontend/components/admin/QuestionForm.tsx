@@ -1,23 +1,17 @@
-// frontend/components/admin/QuestionForm.tsx
-import React, { useState, useEffect, FormEvent } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Question } from '../../types';
-import Button from '../ui/Button';
 import Input from '../ui/Input';
-import { Save, PlusCircle, XCircle } from 'lucide-react';
+import Button from '../ui/Button';
+import { PlusCircle, Save, XCircle } from 'lucide-react';
 
 interface QuestionFormProps {
-    onSubmit: (questionData: Partial<Question>) => Promise<void>;
+    onSubmit: (data: Partial<Question>) => Promise<void>;
     initialData?: Question | null;
     isLoading?: boolean;
     onCancel?: () => void;
 }
 
-const QuestionForm: React.FC<QuestionFormProps> = ({
-                                                       onSubmit,
-                                                       initialData,
-                                                       isLoading = false,
-                                                       onCancel,
-                                                   }) => {
+const QuestionForm: React.FC<QuestionFormProps> = ({ onSubmit, initialData, isLoading = false, onCancel }) => {
     const [text, setText] = useState('');
     const [optionA, setOptionA] = useState('');
     const [optionB, setOptionB] = useState('');
@@ -25,6 +19,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
     const [optionD, setOptionD] = useState('');
     const [correctOption, setCorrectOption] = useState<'A' | 'B' | 'C' | 'D'>('A');
     const [category, setCategory] = useState('');
+    const [source, setSource] = useState(''); // Neuer State für die Quelle
     const [formError, setFormError] = useState('');
 
     useEffect(() => {
@@ -36,6 +31,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
             setOptionD(initialData.optionD || '');
             setCorrectOption((initialData.correctOption as 'A' | 'B' | 'C' | 'D') || 'A');
             setCategory(initialData.category || '');
+            setSource(initialData.source || ''); // Initialisiere das Quellen-Feld
         } else {
             // Reset form for new question
             setText('');
@@ -45,6 +41,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
             setOptionD('');
             setCorrectOption('A');
             setCategory('');
+            setSource(''); // Leere das Quellen-Feld für neue Fragen
         }
     }, [initialData]);
 
@@ -64,6 +61,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
             optionD,
             correctOption,
             category: category || undefined, // Send undefined if empty, not null
+            source: source || undefined, // Füge die Quelle zum zu sendenden Objekt hinzu
         };
         await onSubmit(questionData);
         // Formular-Reset wird extern gehandhabt oder durch initialData-Änderung
@@ -111,6 +109,24 @@ const QuestionForm: React.FC<QuestionFormProps> = ({
                     </select>
                 </div>
                 <Input id="q-category" label="Kategorie (optional)" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="z.B. Klima, Ernährung" />
+            </div>
+
+            {/* Neues Feld für die Quelle */}
+            <div>
+                <label htmlFor="q-source" className="form-label">Quelle (URL) (optional)</label>
+                <input
+                    id="q-source"
+                    type="url"
+                    value={source}
+                    onChange={(e) => setSource(e.target.value)}
+                    className="form-input"
+                    placeholder="https://www.example.com/resource"
+                />
+                {source && (
+                    <p className="text-xs text-textSecondary mt-1">
+                        Diese URL wird nach Beantwortung der Frage als Link angezeigt.
+                    </p>
+                )}
             </div>
 
             <div className="flex justify-end space-x-3 pt-4">
