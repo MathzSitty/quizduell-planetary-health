@@ -1,56 +1,39 @@
 {
   "name": "planetary-quizduell-backend",
   "version": "1.0.0",
-  "description": "Backend for the Planetary Health Quizduell",
-  "main": "dist/server.js",
+  "description": "Backend für ein Quizduell zu Planetary Health Themen",
+  "main": "src/server.ts",
   "scripts": {
-    "dev": "nodemon src/server.ts",
-    "build": "tsc",
     "start": "node dist/server.js",
-    "lint": "eslint . --ext .ts",
-    "prisma:migrate:dev": "prisma migrate dev",
-    "prisma:migrate:deploy": "prisma migrate deploy",
-    "prisma:generate": "prisma generate",
-    "prisma:studio": "prisma studio",
-    "prisma:seed": "ts-node prisma/seed.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "quiz",
-    "planetary-health",
-    "express",
-    "prisma",
-    "socket.io"
-  ],
-  "author": "Your Name/Course",
-  "license": "MIT",
-  "dependencies": {
-    "@prisma/client": "^5.10.2",
-    "bcryptjs": "^2.4.3",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.18.2",
-    "jsonwebtoken": "^9.0.2",
-    "socket.io": "^4.7.4"
-  },
-  "devDependencies": {
-    "@types/bcryptjs": "^2.4.6",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^4.17.21",
-    "@types/jsonwebtoken": "^9.0.5",
-    "@types/node": "^20.11.19",
-    "@typescript-eslint/eslint-plugin": "^7.0.2",
-    "@typescript-eslint/parser": "^7.0.2",
-    "eslint": "^8.56.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-prettier": "^5.1.3",
-    "nodemon": "^3.0.3",
-    "prettier": "^3.2.5",
-    "prisma": "^5.10.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "build": "tsc",
+    "dev": "nodemon",
+    "seed": "npx ts-node prisma/seed.ts"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.4.2",
+    "bad-words": "^3.0.4",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "socket.io": "^4.7.2"
+  },
+  "devDependencies": {
+    "@types/bad-words": "^3.0.3",
+    "@types/bcryptjs": "^2.4.4",
+    "@types/cors": "^2.8.14",
+    "@types/express": "^4.17.19",
+    "@types/jsonwebtoken": "^9.0.3",
+    "@types/morgan": "^1.9.6",
+    "@types/node": "^20.8.6",
+    "nodemon": "^3.0.1",
+    "prisma": "^5.4.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
   }
 }
