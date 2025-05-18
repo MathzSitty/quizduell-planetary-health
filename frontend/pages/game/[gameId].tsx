@@ -33,7 +33,7 @@ const GamePage = () => {
   const [lastRoundResult, setLastRoundResult] = useState<RoundResultPayload | null>(null);
 
   const [opponent, setOpponent] = useState<Partial<User> | null>(null);
-  const [timeLimit, setTimeLimit] = useState(15); // Default, wird von Server überschrieben
+  const [timeLimit, setTimeLimit] = useState(30); // Default, wird von Server überschrieben
   const [timerKey, setTimerKey] = useState(0); // Key zum Reset des Timers
   const [isTimerRunning, setIsTimerRunning] = useState(false);
 
@@ -329,13 +329,37 @@ const GamePage = () => {
             {showRoundResult && lastRoundResult && (
               <div className="card mt-6 text-center animate-fadeIn bg-opacity-90 backdrop-blur-sm border border-primary/30">
                 <h3 className="text-xl font-semibold mb-3 text-primary">Ergebnis Runde {lastRoundResult.roundNumber}</h3>
-                { (currentUser?.id === game.player1Id && lastRoundResult.player1Correct) || (currentUser?.id === game.player2Id && lastRoundResult.player2Correct) ? (
-                    <p className="text-green-600 font-bold flex items-center justify-center"><CheckCircle className="mr-2"/> Deine Antwort war richtig!</p>
-                ) : ( (currentUser?.id === game.player1Id && lastRoundResult.player1Answer) || (currentUser?.id === game.player2Id && lastRoundResult.player2Answer) ) ? (
-                    <p className="text-red-600 font-bold flex items-center justify-center"><XCircle className="mr-2"/> Deine Antwort war falsch.</p>
-                ) : (
-                    <p className="text-textSecondary font-medium">Du hast nicht (rechtzeitig) geantwortet.</p>
-                )}
+                
+                {(() => {
+                  // DIREKTE PRÜFUNG: Die einzige zuverlässige Methode, den Erfolg zu ermitteln, 
+                  // ist der Vergleich der Spielerantwort mit der korrekten Antwort
+                  const isCorrect = selectedOption === lastRoundResult.correctOption;
+                  
+                  // Haben wir überhaupt geantwortet?
+                  const didAnswer = selectedOption !== null && selectedOption !== undefined;
+                  
+                  // Zeige die entsprechende Nachricht basierend auf der lokalen Auswahl
+                  if (isCorrect) {
+                    return (
+                      <p className="text-green-600 font-bold flex items-center justify-center">
+                        <CheckCircle className="mr-2"/> Deine Antwort war richtig!
+                      </p>
+                    );
+                  } else if (didAnswer) {
+                    return (
+                      <p className="text-red-600 font-bold flex items-center justify-center">
+                        <XCircle className="mr-2"/> Deine Antwort war falsch.
+                      </p>
+                    );
+                  } else {
+                    return (
+                      <p className="text-textSecondary font-medium">
+                        Du hast nicht (rechtzeitig) geantwortet.
+                      </p>
+                    );
+                  }
+                })()}
+                
                 <p className="text-sm text-textSecondary mt-1">Die korrekte Antwort war: Option {lastRoundResult.correctOption}</p>
               </div>
             )}

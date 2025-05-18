@@ -1,6 +1,7 @@
 import React from 'react';
 import { Question } from '../../types';
 import Button from '../ui/Button';
+import { CheckCircle, XCircle } from 'lucide-react';
 
 interface QuestionDisplayProps {
     question: Question;
@@ -28,13 +29,18 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
 
     const getOptionStyle = (optionKey: string) => {
         if (correctOption) { // Runde ist vorbei, zeige Ergebnisse
-            if (optionKey === correctOption) return 'bg-green-500 text-white border-green-500'; // Korrekt
-            if (optionKey === selectedOption && optionKey !== correctOption) return 'bg-red-500 text-white border-red-500'; // Eigene falsche Antwort
-            if (optionKey === opponentAnswer && optionKey !== correctOption) return 'bg-red-300 text-red-800 border-red-300'; // Gegnerische falsche Antwort
+            if (optionKey === correctOption) 
+                return 'bg-green-50 !text-green-700 border-2 border-green-500 font-medium'; // Korrekte Antwort
+            if (optionKey === selectedOption && optionKey !== correctOption) 
+                return 'bg-red-50 !text-red-700 border-2 border-red-500 font-medium'; // Eigene falsche Antwort
+            if (optionKey === opponentAnswer && optionKey !== correctOption) 
+                return 'bg-red-50/70 !text-red-500 border-2 border-red-300'; // Gegnerische falsche Antwort
+            // Andere Optionen leicht ausgrauen
+            return 'bg-gray-50 !text-gray-500 border border-gray-300 opacity-70'; 
         } else if (selectedOption === optionKey) { // Spieler hat diese Option gewählt
-            return 'bg-primary border-primary text-white ring-2 ring-primary-dark ring-offset-1';
+            return 'bg-primary/5 !text-textPrimary border-2 border-primary';
         }
-        return 'bg-neutral-light border-neutral text-textPrimary'; // Standard-Stil für unausgewählte Optionen
+        return 'bg-white !text-textPrimary border border-textPrimary hover:border-primary transition-colors'; // Standard-Stil
     };
 
     return (
@@ -49,9 +55,26 @@ const QuestionDisplay: React.FC<QuestionDisplayProps> = ({
                         key={opt.key}
                         onClick={() => onAnswer(opt.key)}
                         disabled={disabledOptions || !!selectedOption}
-                        className={`w-full text-left justify-start py-3 px-4 text-base min-h-[3.5em] ${getOptionStyle(opt.key)}`}
+                        variant="outline"
+                        className={`w-full text-left justify-start py-3 px-4 text-base min-h-[3.5em] relative ${getOptionStyle(opt.key)}`}
                     >
                         <span className="font-bold mr-2">{opt.key}:</span> {opt.text}
+                        
+                        {/* Icons für richtige/falsche Antworten */}
+                        {correctOption && (
+                            <>
+                                {opt.key === correctOption && (
+                                    <span className="absolute right-3 text-green-500">
+                                        <CheckCircle size={20} />
+                                    </span>
+                                )}
+                                {opt.key === selectedOption && opt.key !== correctOption && (
+                                    <span className="absolute right-3 text-red-500">
+                                        <XCircle size={20} />
+                                    </span>
+                                )}
+                            </>
+                        )}
                     </Button>
                 ))}
             </div>
