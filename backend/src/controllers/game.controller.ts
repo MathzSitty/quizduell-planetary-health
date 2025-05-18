@@ -5,9 +5,10 @@ import {
   findOpenGameService,
   joinGameService,
   getGameDetailsService,
+  getUserRecentGamesService
 } from '../services/game.service';
-import { AppError } from '../utils/AppError'; // Angenommen, AppError existiert
-import { GameStatus } from '../types/enums'; // Korrekter Import aus localem Enum-Modul
+import { AppError } from '../utils/AppError';
+import { GameStatus } from '../types/enums';
 
 export const createGame = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -71,6 +72,27 @@ export const getGameDetails = async (req: Request, res: Response, next: NextFunc
         }
 
         res.status(200).json({ status: 'success', data: { game: gameToSend } });
+    } catch (error) {
+        next(error);
+    }
+};
+
+/**
+ * Holt die letzten Spiele eines Benutzers
+ */
+export const getUserRecentGames = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        if (!req.user) throw new AppError('Authentifizierung erforderlich.', 401);
+        
+        // Optional limit parameter with default of 5
+        const limit = req.query.limit ? parseInt(req.query.limit as string) : 5;
+        
+        const recentGames = await getUserRecentGamesService(req.user.id, limit);
+        
+        res.status(200).json({ 
+            status: 'success', 
+            data: { recentGames } 
+        });
     } catch (error) {
         next(error);
     }

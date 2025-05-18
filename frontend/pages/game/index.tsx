@@ -1,24 +1,34 @@
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useSocket } from '../../contexts/SocketContext';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
+import { useSocket } from '../../contexts/SocketContext';
+import { Game } from '../../types';
+import { Search, UserPlus, Clock } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
-import { Game, Question } from '../../types';
 import toast from 'react-hot-toast';
-import { UserPlus, Clock, Search } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import apiClient from '../../lib/apiClient';
+import RecentGames from '../../components/game/RecentGames';
 
-const GamePage = () => {
-  const { user } = useRequireAuth();
-  const { socket, isConnected } = useSocket();
+export default function GamePage() {
+  const { user: currentUser } = useAuth();
+  // Schützt die Seite vor nicht-eingeloggten Benutzern
+  const { isLoading: authLoading } = useRequireAuth();
   const router = useRouter();
+  
+  const { socket, isConnected } = useSocket();
   
   const [isFindingMatch, setIsFindingMatch] = useState(false);
   const [waitingForOpponent, setWaitingForOpponent] = useState(false);
   const [currentGameId, setCurrentGameId] = useState<string | null>(null);
   
+  // Zustand für "Letzte Spiele"
+  const [recentGames, setRecentGames] = useState<Game[]>([]);
+  const [isLoadingGames, setIsLoadingGames] = useState(false);
+  
+  // Socket-Events für Matchmaking
   useEffect(() => {
     if (!socket || !isConnected) return;
     
@@ -94,6 +104,31 @@ const GamePage = () => {
     setWaitingForOpponent(false);
     setCurrentGameId(null);
   };
+
+  // Laden der letzten Spiele
+  useEffect(() => {
+    const fetchRecentGames = async () => {
+        if (!currentUser) return;
+        
+        setIsLoadingGames(true);
+        try {
+            const response = await apiClient.get('/games/recent');
+            if (response.data.status === 'success' && response.data.data?.recentGames) {
+                setRecentGames(response.data.data.recentGames);
+            }
+        } catch (error) {
+            console.error('Fehler beim Laden der letzten Spiele:', error);
+        } finally {
+            setIsLoadingGames(false);
+        }
+    };
+    
+    fetchRecentGames();
+  }, [currentUser]);
+  
+  if (authLoading) {
+    return <div className="main-container text-center py-20"><Spinner size="lg" /><p className="mt-4 text-textSecondary">Lade...</p></div>;
+  }
   
   return (
     <>
@@ -149,14 +184,16 @@ const GamePage = () => {
             <h2 className="text-xl font-semibold mb-4 flex items-center text-textPrimary">
               <Clock className="mr-2" size={20} /> Letzte Spiele
             </h2>
-            <p className="text-textSecondary">
-              Hier könnten deine letzten Spiele angezeigt werden (noch nicht implementiert).
-            </p>
+            {currentUser && (
+                <RecentGames 
+                    games={recentGames} 
+                    currentUser={currentUser} 
+                    isLoading={isLoadingGames} 
+                />
+            )}
           </div>
         </div>
       </div>
     </>
   );
-};
-
-export default GamePage;
+}

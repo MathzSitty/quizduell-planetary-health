@@ -1,3 +1,4 @@
+// Dateipfad: d:\quizduell-planetary-health\backend\src\sockets\game.socket.ts
 import { Server, Socket } from 'socket.io';
 import { Game, Question, User } from '@prisma/client';
 import { GameStatus } from '../types/enums';
@@ -134,7 +135,6 @@ export function initializeSocketIO(io: Server) {
             }
         });
 
-        // ...existing code...
         socket.on('find_game', async (callback) => {
             if (!socket.data.userId) {
                 return callback({ error: 'Nicht authentifiziert.' });
@@ -272,6 +272,7 @@ export function initializeSocketIO(io: Server) {
             }
         });
 
+        // Im submit_answer Event
         socket.on('submit_answer', async ({ gameId, roundNumber, selectedOption }, callback) => {
             if (!socket.data.userId) return callback({ error: 'Nicht authentifiziert.' });
             try {
@@ -287,15 +288,41 @@ export function initializeSocketIO(io: Server) {
                 });
 
                 // WICHTIG: Nur dann das volle Rundenergebnis senden, wenn beide geantwortet haben
-                // Ansonsten nur dem Spieler bestätigen, dass seine Antwort registriert wurde
                 if (isAnswerComplete) {
-                    // Beide haben geantwortet - sende vollständiges Rundenergebnis an alle
-                    io.to(gameId).emit('round_result', {
-                        gameId,
-                        ...result.roundResult,
-                        nextQuestion: result.nextQuestion,
-                        gameStatus: result.game.status
-                    });
+                    // Für Spieler 1
+                    const player1SocketId = userSockets.get(result.game.player1Id);
+                    if (player1SocketId) {
+                        io.to(player1SocketId).emit('round_result', {
+                            gameId,
+                            ...result.roundResult,
+                            nextQuestion: result.nextQuestion,
+                            gameStatus: result.game.status
+                        });
+                    }
+
+                    // Für Spieler 2 - Punkte vertauschen
+                    // HIER IST DER FEHLER: player2Id könnte null sein
+                    if (result.game.player2Id) {  // Prüfe, dass player2Id nicht null ist
+                        const player2SocketId = userSockets.get(result.game.player2Id);
+                        if (player2SocketId) {
+                            const player2Result = {
+                                ...result.roundResult,
+                                player1Answer: result.roundResult.player2Answer,
+                                player2Answer: result.roundResult.player1Answer,
+                                player1Correct: result.roundResult.player2Correct,
+                                player2Correct: result.roundResult.player1Correct,
+                                player1CurrentScore: result.roundResult.player2CurrentScore,
+                                player2CurrentScore: result.roundResult.player1CurrentScore
+                            };
+
+                            io.to(player2SocketId).emit('round_result', {
+                                gameId,
+                                ...player2Result,
+                                nextQuestion: result.nextQuestion,
+                                gameStatus: result.game.status
+                            });
+                        }
+                    }
 
                     // Wenn die Runde oder das Spiel beendet ist
                     if (result.game.status === GameStatus.FINISHED) {
@@ -307,7 +334,8 @@ export function initializeSocketIO(io: Server) {
 
                 callback({ 
                     success: true, 
-                    currentScore: socket.data.userId === result.game.player1Id ? result.game.player1Score : result.game.player2Score,
+                    currentScore: socket.data.userId === result.game.player1Id ? 
+                        result.game.player1Score : result.game.player2Score,
                     bothAnswered: isAnswerComplete
                 });
             } catch (error: any) {
@@ -345,6 +373,7 @@ export function initializeSocketIO(io: Server) {
             }
         });
 
+        // Auch im answer_timeout Event die gleiche Logik implementieren:
         socket.on('answer_timeout', async ({ gameId, roundNumber }, callback) => {
             if (!socket.data.userId) return callback?.({ error: 'Nicht authentifiziert.' });
             
@@ -359,26 +388,50 @@ export function initializeSocketIO(io: Server) {
                     wasTimeout: true
                 });
 
-                // WICHTIG: Bei Timeout IMMER das Rundenergebnis senden, unabhängig davon, 
-                // ob beide geantwortet haben oder nicht
-                io.to(gameId).emit('round_result', {
-                    gameId,
-                    ...result.roundResult,
-                    nextQuestion: result.nextQuestion,
-                    gameStatus: result.game.status,
-                    forcedByTimeout: true  // Neues Flag zur Kennzeichnung von Timeout-erzwungenen Rundenwechseln
-                });
+                // Für Spieler 1
+                const player1SocketId = userSockets.get(result.game.player1Id);
+                if (player1SocketId) {
+                    io.to(player1SocketId).emit('round_result', {
+                        gameId,
+                        ...result.roundResult,
+                        nextQuestion: result.nextQuestion,
+                        gameStatus: result.game.status,
+                        forcedByTimeout: true
+                    });
+                }
+
+                // Für Spieler 2 - Punkte vertauschen
+                // HIER IST DER ZWEITE FEHLER: player2Id könnte null sein
+                if (result.game.player2Id) {  // Prüfe, dass player2Id nicht null ist
+                    const player2SocketId = userSockets.get(result.game.player2Id);
+                    if (player2SocketId) {
+                        const player2Result = {
+                            ...result.roundResult,
+                            player1Answer: result.roundResult.player2Answer,
+                            player2Answer: result.roundResult.player1Answer,
+                            player1Correct: result.roundResult.player2Correct,
+                            player2Correct: result.roundResult.player1Correct,
+                            player1CurrentScore: result.roundResult.player2CurrentScore,
+                            player2CurrentScore: result.roundResult.player1CurrentScore
+                        };
+
+                        io.to(player2SocketId).emit('round_result', {
+                            gameId,
+                            ...player2Result,
+                            nextQuestion: result.nextQuestion,
+                            gameStatus: result.game.status,
+                            forcedByTimeout: true
+                        });
+                    }
+                }
 
                 // Spielende-Logik
                 if (result.game.status === GameStatus.FINISHED) {
                     io.to(gameId).emit('game_over', result.game);
                     gameRooms.delete(gameId);
                 }
-                
-                callback?.({ 
-                    success: true,
-                    bothAnswered: true // Wir behandeln es, als hätten beide geantwortet
-                });
+
+                callback?.({ success: true });
             } catch (error: any) {
                 console.error(`Error in answer_timeout for game ${gameId}:`, error);
                 callback?.({ error: error.message || 'Fehler beim Verarbeiten des Timeouts.' });

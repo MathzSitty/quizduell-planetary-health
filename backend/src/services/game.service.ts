@@ -1,10 +1,16 @@
+// backend/src/services/game.service.ts
 import { PrismaClient, Game, Question } from '@prisma/client';
-import { GameStatus } from '../types/enums';
 import { AppError } from '../utils/AppError';
+import { GameStatus } from '../types/enums';
 import { getRandomQuestionsService } from './question.service';
 
 const prisma = new PrismaClient();
-const QUESTIONS_PER_GAME = 5;
+
+// Anzahl der Fragen pro Spiel
+export const QUESTIONS_PER_GAME = 5;
+
+// Zeitlimit in Sekunden pro Frage
+export const QUESTION_TIME_LIMIT_SECONDS = 30;
 
 interface CreateGameInput {
     player1Id: string;
@@ -17,6 +23,7 @@ interface JoinGameInput {
 
 export const createGameService = async (input: CreateGameInput): Promise<Game> => {
     const { player1Id } = input;
+
     return prisma.game.create({
         data: {
             player1Id,
@@ -25,9 +32,7 @@ export const createGameService = async (input: CreateGameInput): Promise<Game> =
             player2Score: 0,
             currentQuestionIdx: 0,
         },
-        include: {
-            player1: { select: { id: true, name: true, uniHandle: true } },
-        }
+        include: { player1: { select: { id: true, name: true, uniHandle: true } } }
     });
 };
 
@@ -96,6 +101,7 @@ export const joinGameService = async (input: JoinGameInput): Promise<Game & { qu
 };
 
 
+// Dateipfad: d:\quizduell-planetary-health\backend\src\services\game.service.ts
 export const getGameDetailsService = async (gameId: string, userId: string): Promise<Game | null> => {
     const game = await prisma.game.findUnique({
         where: { id: gameId },
@@ -114,7 +120,7 @@ export const getGameDetailsService = async (gameId: string, userId: string): Pro
                             optionC: true, 
                             optionD: true, 
                             category: true,
-                            source: true // Quellenfeld hinzugefügt
+                            source: true
                         }
                     }
                 }
@@ -125,15 +131,22 @@ export const getGameDetailsService = async (gameId: string, userId: string): Pro
 
     if (!game) return null;
     
-    // NEUE LOGIK: Wenn der anfragende User Spieler 2 ist, tausche die Spieler für die Ansicht
+    // Wenn der anfragende User Spieler 2 ist, tausche die Spieler für die Ansicht
     if (game.player2Id === userId) {
+        // Wenn wir die Spieler tauschen, müssen wir auch die Punkte tauschen
+        const p1Score = game.player1Score;
+        const p2Score = game.player2Score;
+        
         // Use type assertion to tell TypeScript this is the correct structure
         return {
             ...game,
             player1Id: game.player2Id,
             player2Id: game.player1Id,
             player1: game.player2,
-            player2: game.player1
+            player2: game.player1,
+            // Auch die Punktzahlen tauschen!
+            player1Score: p2Score,
+            player2Score: p1Score
         } as typeof game;
     }
     
@@ -217,7 +230,6 @@ export const submitAnswerService = async (
         } else if (!updatedRound.player1Correct && updatedRound.player2Correct) {
             p2RoundScore = 1;
         }
-
         gameUpdateData.player1Score = game.player1Score + p1RoundScore;
         gameUpdateData.player2Score = game.player2Score + p2RoundScore;
         roundResultForSocket.player1CurrentScore = gameUpdateData.player1Score;
@@ -281,6 +293,37 @@ export const forfeitGameService = async (gameId: string, forfeitingPlayerId: str
         include: {
             player1: { select: { id: true, name: true } },
             player2: { select: { id: true, name: true } },
+            winner: { select: { id: true, name: true } }
+        }
+    });
+};
+
+/**
+ * Holt die letzten Spiele eines Benutzers
+ * 
+ * @param userId ID des Benutzers
+ * @param limit Anzahl der zurückzugebenden Spiele (Standard: 5)
+ * @returns Array mit den letzten Spielen des Benutzers
+ */
+export const getUserRecentGamesService = async (userId: string, limit: number = 5): Promise<Game[]> => {
+    return prisma.game.findMany({
+        where: {
+            OR: [
+                { player1Id: userId },
+                { player2Id: userId }
+            ],
+            // Nur abgeschlossene und abgebrochene Spiele
+            status: {
+                in: [GameStatus.FINISHED, GameStatus.CANCELLED]
+            }
+        },
+        orderBy: {
+            updatedAt: 'desc'
+        },
+        take: limit,
+        include: {
+            player1: { select: { id: true, name: true, uniHandle: true } },
+            player2: { select: { id: true, name: true, uniHandle: true } },
             winner: { select: { id: true, name: true } }
         }
     });

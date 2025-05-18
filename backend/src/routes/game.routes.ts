@@ -1,19 +1,30 @@
 // backend/src/routes/game.routes.ts
-import { Router } from 'express';
-import {
-    createGame,
-    findAndJoinGame,
-    getGameDetails,
+import express from 'express';
+import { 
+    createGame, 
+    findAndJoinGame, 
+    getGameDetails, 
+    getUserRecentGames 
 } from '../controllers/game.controller';
 import { protect } from '../middleware/auth.middleware';
 
-const router = Router();
+const router = express.Router();
 
-// Diese Routen sind für das initiale Erstellen/Finden von Spielen.
-// Die eigentliche Spielinteraktion (Antworten etc.) läuft über Sockets.
-router.post('/find-or-create', protect, findAndJoinGame); // Kombinierte Route
-router.post('/', protect, createGame); // Nur erstellen (wenn Client das Matchmaking macht)
+// Authentifizierung für alle Game-Routen
+router.use(protect);
 
-router.get('/:id', protect, getGameDetails); // Details eines spezifischen Spiels abrufen
+// Spiel erstellen
+router.post('/', createGame);
+
+// Offenes Spiel finden und beitreten
+router.post('/join', findAndJoinGame);
+
+// Letzte Spiele eines Benutzers abrufen
+// Wichtig: Dieser Endpunkt muss vor dem /:id Endpunkt stehen, 
+// damit '/recent' nicht als ID interpretiert wird
+router.get('/recent', getUserRecentGames);
+
+// Spieldetails abrufen
+router.get('/:id', getGameDetails);
 
 export default router;

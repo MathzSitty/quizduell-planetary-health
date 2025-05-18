@@ -113,22 +113,50 @@ export const deleteQuestionService = async (id: string): Promise<Question | null
     });
 };
 
-export const getRandomQuestionsService = async (count: number, category?: string): Promise<Question[]> => {
+/**
+ * Holt eine zufällige Auswahl von Fragen aus der Datenbank.
+ * 
+ * @param count Die Anzahl der zurückzugebenden Fragen
+ * @param category Optionale Kategorie-Filterung
+ * @param excludeIds Optional: Array von Frage-IDs, die ausgeschlossen werden sollen
+ * @returns Array mit zufälligen Fragen
+ */
+export const getRandomQuestionsService = async (
+    count: number, 
+    category?: string, 
+    excludeIds: string[] = []
+): Promise<Question[]> => {
     const whereClause: any = {};
+    
+    // Kategorie-Filter hinzufügen, falls vorhanden
     if (category) {
         whereClause.category = category;
     }
+    
+    // Ausschluss von Fragen nach ID hinzufügen, falls vorhanden
+    if (excludeIds.length > 0) {
+        whereClause.id = {
+            notIn: excludeIds
+        };
+    }
 
-    const allQuestionsCount = await prisma.question.count({ where: whereClause });
-    if (allQuestionsCount === 0) return [];
-    if (count > allQuestionsCount) count = allQuestionsCount;
+    // Gesamtzahl verfügbarer Fragen ermitteln (unter Berücksichtigung der Filter)
+    const availableQuestionsCount = await prisma.question.count({ where: whereClause });
+    
+    // Wenn keine Fragen verfügbar sind, leeres Array zurückgeben
+    if (availableQuestionsCount === 0) return [];
+    
+    // Anpassen der Anzahl, falls mehr angefordert als verfügbar
+    if (count > availableQuestionsCount) count = availableQuestionsCount;
 
+    // Hole alle passenden Fragen und wähle zufällig aus (Fisher-Yates Shuffle)
     const allQuestions = await prisma.question.findMany({ where: whereClause });
-
-    // Fisher-Yates shuffle
+    
+    // Fisher-Yates Shuffle
     for (let i = allQuestions.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
     }
+    
     return allQuestions.slice(0, count);
 };

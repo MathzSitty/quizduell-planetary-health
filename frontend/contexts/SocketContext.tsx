@@ -1,11 +1,12 @@
 // frontend/contexts/SocketContext.tsx
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import io, { Socket as SocketIOClientSocket } from 'socket.io-client'; // Eindeutiger Name
-import { useAuth } from './AuthContext'; // Angepasster Pfad
-import { SocketContextType } from '../types'; // Importiere deine Typen
+import io, { Socket as SocketIOClientSocket } from 'socket.io-client';
+import { useAuth } from './AuthContext';
+import { SocketContextType } from '../types';
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
 
+// Exportiere beide Namen für Abwärtskompatibilität
 export const useSocket = (): SocketContextType => {
     const context = useContext(SocketContext);
     if (!context) {
@@ -14,6 +15,9 @@ export const useSocket = (): SocketContextType => {
     return context;
 };
 
+// Füge den alternativen Namen hinzu
+export const useSocketContext = useSocket;
+
 interface SocketProviderProps {
     children: ReactNode;
 }
@@ -21,7 +25,7 @@ interface SocketProviderProps {
 export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
     const [socket, setSocket] = useState<SocketIOClientSocket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
-    const { user, token } = useAuth(); // User und Token vom AuthContext
+    const { user, token } = useAuth();
 
     useEffect(() => {
         if (user && token && process.env.NEXT_PUBLIC_SOCKET_URL) {
