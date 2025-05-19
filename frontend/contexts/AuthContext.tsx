@@ -84,11 +84,14 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 setUser(registeredUser);
                 setToken(newToken);
                 toast.success(`Registrierung erfolgreich, ${registeredUser.name}!`);
-                router.push('/'); // Zur Startseite oder Dashboard
+                router.push('/');
             }
         } catch (error: any) {
-            console.error('Registrierung fehlgeschlagen:', error.response?.data?.message || error.message);
+            console.error('Registration failed:', error);
+            // Re-throw the error so it can be caught by the component
+            throw error;
         } finally {
+            // Always reset loading state, regardless of success or failure
             setIsLoading(false);
         }
     };
