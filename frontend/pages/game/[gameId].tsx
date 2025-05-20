@@ -36,6 +36,7 @@ const GamePage = () => {
   const [timeLimit, setTimeLimit] = useState(30); // Default, wird von Server überschrieben
   const [timerKey, setTimerKey] = useState(0); // Key zum Reset des Timers
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [showGameOver, setShowGameOver] = useState(false); // Neuer State für Game Over Anzeige
 
   // --- Helper to always set the correct opponent ---
   const determineOpponent = useCallback(
@@ -79,6 +80,7 @@ const GamePage = () => {
           }
         } else if (fetchedGame.status === 'FINISHED' || fetchedGame.status === 'CANCELLED') {
           setIsTimerRunning(false);
+          setShowGameOver(true);
         }
       } else {
         throw new Error(response.data.message || 'Spieldetails konnten nicht geladen werden.');
@@ -119,6 +121,7 @@ const GamePage = () => {
       setSelectedOption(null);
       setHasAnsweredThisRound(false);
       setShowRoundResult(false);
+      setShowGameOver(false);
       setTimerKey(prev => prev + 1);
       setIsTimerRunning(true);
       setIsLoading(false);
@@ -137,6 +140,17 @@ const GamePage = () => {
         setIsTimerRunning(false);
         setShowRoundResult(true);
 
+        setGame(prevGame => {
+          if (!prevGame) return null;
+          return {
+            ...prevGame,
+            player1Score: data.player1CurrentScore,
+            player2Score: data.player2CurrentScore,
+            status: data.gameStatus,
+            currentQuestionIdx: data.nextQuestion ? prevGame.currentQuestionIdx + 1 : prevGame.currentQuestionIdx,
+          };
+        });
+
         if (data.nextQuestion && data.gameStatus === 'ACTIVE') {
           setTimeout(() => {
             setCurrentQuestion(data.nextQuestion!);
@@ -148,28 +162,32 @@ const GamePage = () => {
             setTimerKey(prev => prev + 1);
             setIsTimerRunning(true);
           }, 3000);
+        } else {
+          // For the last question or if game is finished, just hide the result after the delay
+          setTimeout(() => {
+            setShowRoundResult(false);
+            // Wenn das Spiel beendet ist, zeige Game Over Screen nach
+            // dem Verstecken des Rundenergebnisses
+            if (data.gameStatus === 'FINISHED') {
+              setShowGameOver(true);
+            }
+          }, 3000);
         }
       }
-
-      setGame(prevGame => {
-        if (!prevGame) return null;
-        return {
-          ...prevGame,
-          player1Score: data.player1CurrentScore,
-          player2Score: data.player2CurrentScore,
-          status: data.gameStatus,
-          currentQuestionIdx: data.nextQuestion ? prevGame.currentQuestionIdx + 1 : prevGame.currentQuestionIdx,
-        };
-      });
-
-      setHasAnsweredThisRound(true);
     };
 
     const handleGameOver = (finishedGame: Game) => {
       if (finishedGame.id !== gameId) return;
+      
       setGame(finishedGame);
       setIsTimerRunning(false);
-      setShowRoundResult(false);
+      
+      // Nicht sofort das Ergebnis verstecken - wir wollen erst die letzte Frage zeigen
+      // Wenn wir gerade das Rundenergebnis anzeigen, warten wir mit dem Game Over screen
+      if (!showRoundResult) {
+        setShowGameOver(true);
+      }
+      
       toast.success('Spiel beendet!', { duration: 4000 });
     };
 
@@ -185,6 +203,7 @@ const GamePage = () => {
       toast.error(`${leaverName} hat das Spiel verlassen.`, { duration: 4000 });
       setGame(prev => prev ? { ...prev, status: 'CANCELLED', winnerId: data.winnerId } : null);
       setIsTimerRunning(false);
+      setShowGameOver(true);
     };
 
     const handleGameUpdate = (updatedGame: Game) => {
@@ -210,7 +229,7 @@ const GamePage = () => {
       socket.off('opponent_forfeited', handleOpponentLeftOrForfeited);
       socket.off('game_updated', handleGameUpdate);
     };
-  }, [socket, isConnected, gameId, currentUser, opponent?.name, determineOpponent]);
+  }, [socket, isConnected, gameId, currentUser, opponent?.name, determineOpponent, showRoundResult]);
 
   const handleAnswer = (selectedOpt: 'A' | 'B' | 'C' | 'D') => {
     if (!socket || !game || hasAnsweredThisRound || showRoundResult || game.status !== 'ACTIVE') return;
@@ -284,7 +303,7 @@ const GamePage = () => {
       <div className="main-container">
         <GameStatusDisplay game={game} currentUser={currentUser} opponent={opponent} />
 
-        {gameIsOver ? (
+        {showGameOver && gameIsOver ? (
           <div className="card text-center py-10 animate-fadeIn">
             <h2 className="text-3xl font-bold mb-6">Spiel beendet!</h2>
             {game.status === 'CANCELLED' && (
@@ -318,14 +337,13 @@ const GamePage = () => {
               isRunning={isTimerRunning && !showRoundResult && !hasAnsweredThisRound}
             />
             <QuestionDisplay
-              // Aktualisiere die Anzeige der Quelleninformationen im Bereich nach Zeile 320
               question={currentQuestion}
               onAnswer={handleAnswer}
               disabledOptions={hasAnsweredThisRound || showRoundResult || !isTimerRunning}
               selectedOption={selectedOption}
               correctOption={showRoundResult ? lastRoundResult?.correctOption : null}
               opponentAnswer={showRoundResult ? (currentUser?.id === game.player1Id ? lastRoundResult?.player2Answer : lastRoundResult?.player1Answer) : null}
-              showSource={showRoundResult} // Zeige Quelle, wenn das Rundenergebnis angezeigt wird
+              showSource={showRoundResult}
             />
 
             {showRoundResult && lastRoundResult && (
