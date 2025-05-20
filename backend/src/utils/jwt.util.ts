@@ -1,6 +1,7 @@
 // backend/src/utils/jwt.util.ts
-import jwt, { SignOptions, JwtPayload as VerifiedJwtPayload } from 'jsonwebtoken'; // JwtPayload umbenannt, um Konflikt zu vermeiden
-import config from '../config'; // Stelle sicher, dass config.jwtSecret hier als string ankommt
+import jwt, { SignOptions, JwtPayload as VerifiedJwtPayload } from 'jsonwebtoken';
+import config from '../config';
+import crypto from 'crypto';
 
 // Definiere den Typ für unser Payload-Objekt klarer
 interface CustomJwtPayload {
@@ -9,56 +10,102 @@ interface CustomJwtPayload {
 }
 
 export const generateToken = (payload: CustomJwtPayload): string => {
-  // Stelle sicher, dass jwtSecret ein String ist.
-  // In config/index.ts sollte dies bereits sichergestellt sein,
-  // aber eine zusätzliche Prüfung hier schadet nicht oder wir verlassen uns auf die Config.
   if (!config.jwtSecret) {
-    // Dieser Fall sollte idealerweise nie eintreten, wenn die Config richtig geladen wird
-    // und das Programm bei fehlendem Secret abbricht.
     console.error('FATAL ERROR: JWT_SECRET is not defined. Cannot sign token.');
     throw new Error('JWT_SECRET is not configured, unable to sign token.');
   }
 
   const options: SignOptions = {
     expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'],
-    // algorithm: 'HS256' // Standardmäßig HS256, wenn Secret ein String ist. Kann explizit gesetzt werden.
   };
 
-  // jwt.sign erwartet, dass das Payload ein Objekt ist, das in JSON umgewandelt werden kann.
-  // Unser CustomJwtPayload ist bereits so ein Objekt.
   return jwt.sign(payload, config.jwtSecret, options);
 };
 
-// Wir benennen VerifiedJwtPayload, um klarzustellen, dass es von jwt.verify kommt
-// und potenziell mehr Felder enthalten kann als unser CustomJwtPayload.
 export const verifyToken = (token: string): CustomJwtPayload & VerifiedJwtPayload | null => {
   if (!config.jwtSecret) {
     console.error('FATAL ERROR: JWT_SECRET is not defined. Cannot verify token.');
-    return null; // Oder wirf einen Fehler
+    return null;
   }
 
   try {
-    // TypeScript muss wissen, dass das Ergebnis unserem Payload-Typ entspricht (oder ein Teil davon ist).
-    // Wir verwenden eine Typ-Assertion, aber sei vorsichtig damit.
-    // Besser wäre eine Validierung des dekodierten Objekts.
     const decoded = jwt.verify(token, config.jwtSecret) as CustomJwtPayload & VerifiedJwtPayload;
     
-    // Zusätzliche Prüfung, ob die erwarteten Felder vorhanden sind
     if (decoded && typeof decoded.userId === 'string' && typeof decoded.role === 'string') {
-        return decoded;
+      return decoded;
     }
     console.warn('JWT verification: Decoded token is missing expected fields (userId, role).');
     return null;
 
   } catch (error: any) {
-    // console.error('JWT Verification Error:', error.message); // Für Debugging
     if (error.name === 'TokenExpiredError') {
       console.log('JWT Token expired.');
     } else if (error.name === 'JsonWebTokenError') {
       console.log('JWT Error:', error.message);
     } else {
-      console.error('JWT Unknown Verification Error:', error);
+      console.error('Unknown JWT error:', error);
     }
     return null;
   }
+};
+
+/**
+ * Generiert einen CSRF-Token mit hoher Entropie
+ * @returns String mit 64 Hex-Zeichen (32 Bytes)
+ */
+export const generateCsrfToken = (): string => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Validiert einen CSRF-Token gegen einen gespeicherten Token
+ * Verwendet einen zeitkonstanten Vergleich zum Schutz vor Timing-Angriffen
+ * 
+ * @param token Der vom Client gesendete Token
+ * @param storedToken Der im Server gespeicherte Token
+ * @returns Boolean, der angibt, ob die Tokens übereinstimmen
+ */
+export const validateCsrfToken = (token: string, storedToken: string): boolean => {
+  try {
+    // Konvertiere Strings in Buffer für den zeitkonstanten Vergleich
+    const tokenBuffer = Buffer.from(token, 'hex');
+    const storedTokenBuffer = Buffer.from(storedToken, 'hex');
+    
+    // Stelle sicher, dass beide Buffer die gleiche Länge haben
+    if (tokenBuffer.length !== storedTokenBuffer.length) {
+      return false;
+    }
+    
+    // Führe einen zeitkonstanten Vergleich durch, um Timing-Angriffe zu verhindern
+    return crypto.timingSafeEqual(tokenBuffer, storedTokenBuffer);
+  } catch (error) {
+    console.error('Error validating CSRF token:', error);
+    return false;
+  }
+};
+
+/**
+ * Erstellt einen JWT-Token, der zusätzlich einen CSRF-Token enthält
+ * Dies ermöglicht Double-Submit-Cookie CSRF-Schutz
+ * 
+ * @param payload Die Nutzdaten für den JWT
+ * @param csrfToken Der zu inkludierende CSRF-Token
+ * @returns String mit dem JWT
+ */
+export const generateTokenWithCsrf = (payload: CustomJwtPayload, csrfToken: string): string => {
+  if (!config.jwtSecret) {
+    console.error('FATAL ERROR: JWT_SECRET is not defined. Cannot sign token.');
+    throw new Error('JWT_SECRET is not configured, unable to sign token.');
+  }
+
+  const payloadWithCsrf = {
+    ...payload,
+    csrf: csrfToken
+  };
+
+  const options: SignOptions = {
+    expiresIn: config.jwtExpiresIn as jwt.SignOptions['expiresIn'],
+  };
+
+  return jwt.sign(payloadWithCsrf, config.jwtSecret, options);
 };

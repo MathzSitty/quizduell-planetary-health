@@ -72,6 +72,16 @@ export default function LoginPage() {
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="Ihr Passwort"
                         />
+                        
+                        {/* Passwort vergessen Link */}
+                        <div className="flex items-center justify-between mt-2">
+                            <div className="text-sm">
+                                <Link href="/forgot-password" className="text-primary hover:text-primary-dark">
+                                    Passwort vergessen?
+                                </Link>
+                            </div>
+                        </div>
+                        
                         <div>
                             <Button type="submit" className="w-full" isLoading={isLoading} disabled={isLoading} leftIcon={<LogIn size={18} />}>
                                 Login

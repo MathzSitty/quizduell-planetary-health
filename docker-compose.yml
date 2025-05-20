@@ -39,6 +39,8 @@ services:
       INITIAL_ADMIN_PASSWORD: SecurePassword123!
       INITIAL_ADMIN_NAME: Admin
       INITIAL_ADMIN_UNIHANDLE: HS-Admin
+      # E-Mail-Konfiguration für Passwort-Reset
+      EMAIL_FROM: noreply@planetary-health-quiz.de
     restart: unless-stopped
 
   frontend:

@@ -29,7 +29,7 @@ async function main() {
         httpServer.listen(PORT, () => {
             console.log(`🚀 Backend server is running on http://localhost:${PORT}`);
             console.log(`🔌 Socket.IO server is listening on port ${PORT}`);
-            console.log(`NODE_ENV: ${config.env}`);
+            console.log(`NODE_ENV: ${config.nodeEnv}`); // Hier war der Fehler: config.env -> config.nodeEnv
         });
     } catch (error) {
         console.error('❌ Prisma: Failed to connect to the database or start server:', error);
