@@ -27,11 +27,11 @@ RUN ls -la ./dist || echo "Fehler: dist Verzeichnis existiert nicht!"
 EXPOSE 5001
 
 # Start-Script mit korrektem Pfad zur JS-Datei
-CMD sh -c "echo 'Warte auf Datenbank...' && \
+CMD ["sh", "-c", "echo 'Warte auf Datenbank...' && \
     sleep 5 && \
     echo 'Führe Migrationen aus...' && \
     npx prisma migrate deploy && \
     echo 'Initialisiere Datenbank mit Seed-Daten...' && \
     npx prisma db seed && \
     echo 'Starte Server...' && \
-    node ./dist/src/server.js"
+    node ./dist/src/server.js"]
