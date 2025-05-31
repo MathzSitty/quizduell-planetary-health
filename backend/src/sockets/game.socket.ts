@@ -12,6 +12,7 @@ import {
     getGameDetailsService,
 } from '../services/game.service'; // Importiere Game Services
 import { AppError } from '../utils/AppError'; // Deine AppError Klasse
+import { verifyToken } from '../utils/jwt.util'; // Importiere verifyToken
 
 // Hilfsfunktionen oder In-Memory-Speicher für Sockets
 // Mapping von userId zu socketId für direkte Nachrichten
@@ -33,21 +34,29 @@ interface AuthenticatedSocket extends Socket {
 }
 
 export function initializeSocketIO(io: Server) {
-    // Socket.IO Middleware für Authentifizierung (optional, aber empfohlen)
+    // Socket.IO Middleware für Authentifizierung
     io.use(async (socket: AuthenticatedSocket, next) => {
-        const token = socket.handshake.auth.token; // Erwartet Token vom Client
-        // Hier könntest du den Token validieren (z.B. mit jwt.util)
-        // und die userId an socket.data binden.
-        // Für dieses Beispiel nehmen wir an, der Client sendet userId direkt (weniger sicher)
-        const userId = socket.handshake.auth.userId;
-        if (userId) {
-            socket.data.userId = userId;
-            userSockets.set(userId, socket.id); // Speichere userId -> socketId Mapping
-            console.log(`Socket ${socket.id} authenticated for user ${userId}`);
-            next();
+        const token = socket.handshake.auth.token;
+
+        if (token && typeof token === 'string') {
+            try {
+                const decoded = verifyToken(token);
+                if (decoded && decoded.userId) {
+                    socket.data.userId = decoded.userId;
+                    userSockets.set(decoded.userId, socket.id); // Speichere userId -> socketId Mapping
+                    console.log(`Socket ${socket.id} authenticated for user ${decoded.userId}`);
+                    next();
+                } else {
+                    console.log(`Socket ${socket.id} authentication failed: Invalid token or userId missing in token.`);
+                    next(new Error('Authentication error: Invalid token.'));
+                }
+            } catch (error) {
+                console.error(`Socket ${socket.id} authentication error during token verification:`, error);
+                next(new Error('Authentication error: Token verification failed.'));
+            }
         } else {
-            console.log(`Socket ${socket.id} authentication failed: No userId provided.`);
-            next(new Error('Authentication error: userId is required'));
+            console.log(`Socket ${socket.id} authentication failed: No token provided.`);
+            next(new Error('Authentication error: Token is required.'));
         }
     });
 
@@ -301,7 +310,6 @@ export function initializeSocketIO(io: Server) {
                     }
 
                     // Für Spieler 2 - Punkte vertauschen
-                    // HIER IST DER FEHLER: player2Id könnte null sein
                     if (result.game.player2Id) {  // Prüfe, dass player2Id nicht null ist
                         const player2SocketId = userSockets.get(result.game.player2Id);
                         if (player2SocketId) {
@@ -401,7 +409,6 @@ export function initializeSocketIO(io: Server) {
                 }
 
                 // Für Spieler 2 - Punkte vertauschen
-                // HIER IST DER ZWEITE FEHLER: player2Id könnte null sein
                 if (result.game.player2Id) {  // Prüfe, dass player2Id nicht null ist
                     const player2SocketId = userSockets.get(result.game.player2Id);
                     if (player2SocketId) {

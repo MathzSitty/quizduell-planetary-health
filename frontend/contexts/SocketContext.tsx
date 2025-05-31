@@ -32,10 +32,9 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
             // Nur verbinden, wenn User und Token vorhanden sind
             const newSocket = io(process.env.NEXT_PUBLIC_SOCKET_URL, {
                 auth: {
-                    // Sende den Token für serverseitige Socket-Authentifizierung
-                    // token: token,
+                    token: token // Sende den Token für serverseitige Socket-Authentifizierung
                     // Alternativ, wenn das Backend userId erwartet (wie im Backend Socket-Code):
-                    userId: user.id
+                    // userId: user.id 
                 },
                 reconnectionAttempts: 5,
                 transports: ['websocket'], // Bevorzuge WebSockets
@@ -51,13 +50,15 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
                 setIsConnected(false);
                 if (reason === 'io server disconnect') {
                     // Der Server hat die Verbindung aktiv getrennt, z.B. bei Auth-Fehler
-                    newSocket.connect(); // Versuche erneut zu verbinden
+                    // newSocket.connect(); // Versuche erneut zu verbinden - kann zu Schleifen führen, wenn Auth dauerhaft fehlschlägt
+                    console.warn('Socket.IO: Server disconnected. Will not automatically reconnect if it was an auth issue.');
                 }
             });
 
             newSocket.on('connect_error', (err) => {
                 console.error('Socket.IO: Connection Error -', err.message, (err as any)?.data || '');
                 // Hier könntest du dem Benutzer eine Nachricht anzeigen oder spezielle Logik implementieren
+                // z.B. wenn err.message 'Authentication error' enthält, den User ausloggen oder Token erneuern.
             });
 
             // Globale Server-Fehlermeldungen vom Socket abfangen
