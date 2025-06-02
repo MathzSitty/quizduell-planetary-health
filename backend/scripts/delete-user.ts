@@ -8,7 +8,8 @@ async function deleteUser() {
     // oder mit email: ... falls man die email kennen sollte
     const userToDelete = await prisma.user.findFirst({
       where: {
-        name: 'Luna'
+        
+        email: 'peter@beispiel.de'
       }
     });
 
