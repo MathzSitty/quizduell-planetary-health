@@ -1,11 +1,12 @@
-// backend/src/controllers/game.controller.ts
 import { Request, Response, NextFunction } from 'express';
 import {
   createGameService,
   findOpenGameService,
   joinGameService,
   getGameDetailsService,
-  getUserRecentGamesService
+  getUserRecentGamesService,
+  createSoloGameService,
+  submitAnswerService
 } from '../services/game.service';
 import { AppError } from '../utils/AppError';
 import { GameStatus } from '../types/enums';
@@ -39,6 +40,30 @@ export const findAndJoinGame = async (req: Request, res: Response, next: NextFun
       waiting = true;
       res.status(200).json({ status: 'success', data: { game, waiting: true } });
     }
+  } catch (error) {
+    next(error);
+  }
+};
+
+// NEU: Solo-Spiel erstellen
+export const createSoloGame = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) throw new AppError('Authentifizierung erforderlich.', 401);
+    
+    const { difficulty } = req.body; // Optional: EASY, MEDIUM, HARD
+    
+    const soloGame = await createSoloGameService({
+      player1Id: req.user.id,
+      difficulty: difficulty || undefined
+    });
+    
+    res.status(201).json({ 
+      status: 'success', 
+      data: { 
+        game: soloGame,
+        isSolo: true 
+      } 
+    });
   } catch (error) {
     next(error);
   }
@@ -96,4 +121,26 @@ export const getUserRecentGames = async (req: Request, res: Response, next: Next
     } catch (error) {
         next(error);
     }
+};
+
+export const submitAnswer = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) throw new AppError('Authentifizierung erforderlich.', 401);
+    
+    const { id: gameId } = req.params;
+    const { roundNumber, selectedOption } = req.body;
+    
+    const result = await submitAnswerService(gameId, req.user.id, roundNumber, selectedOption);
+    
+    res.status(200).json({ 
+      status: 'success', 
+      data: { 
+        game: result.game,
+        roundResult: result.roundResult,
+        nextQuestion: result.nextQuestion 
+      } 
+    });
+  } catch (error) {
+    next(error);
+  }
 };

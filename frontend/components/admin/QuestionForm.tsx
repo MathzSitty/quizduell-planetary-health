@@ -1,3 +1,4 @@
+// frontend/components/admin/QuestionForm.tsx
 import { FormEvent, useEffect, useState } from 'react';
 import { Question } from '../../types';
 import Input from '../ui/Input';
@@ -19,7 +20,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSubmit, initialData, isLo
     const [optionD, setOptionD] = useState('');
     const [correctOption, setCorrectOption] = useState<'A' | 'B' | 'C' | 'D'>('A');
     const [category, setCategory] = useState('');
-    const [source, setSource] = useState(''); // Neuer State für die Quelle
+    const [source, setSource] = useState('');
+    const [difficulty, setDifficulty] = useState<'EASY' | 'MEDIUM' | 'HARD'>('MEDIUM'); // NEU: Schwierigkeitsgrad
     const [formError, setFormError] = useState('');
 
     useEffect(() => {
@@ -31,7 +33,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSubmit, initialData, isLo
             setOptionD(initialData.optionD || '');
             setCorrectOption((initialData.correctOption as 'A' | 'B' | 'C' | 'D') || 'A');
             setCategory(initialData.category || '');
-            setSource(initialData.source || ''); // Initialisiere das Quellen-Feld
+            setSource(initialData.source || '');
+            setDifficulty(initialData.difficulty || 'MEDIUM'); // NEU: Schwierigkeit setzen
         } else {
             // Reset form for new question
             setText('');
@@ -41,7 +44,8 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSubmit, initialData, isLo
             setOptionD('');
             setCorrectOption('A');
             setCategory('');
-            setSource(''); // Leere das Quellen-Feld für neue Fragen
+            setSource('');
+            setDifficulty('MEDIUM'); // NEU: Standard-Schwierigkeit
         }
     }, [initialData]);
 
@@ -53,18 +57,18 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSubmit, initialData, isLo
             return;
         }
         const questionData: Partial<Question> = {
-            id: initialData?.id, // Wichtig für Update
+            id: initialData?.id,
             text,
             optionA,
             optionB,
             optionC,
             optionD,
             correctOption,
-            category: category || undefined, // Send undefined if empty, not null
-            source: source || undefined, // Füge die Quelle zum zu sendenden Objekt hinzu
+            category: category || undefined,
+            source: source || undefined,
+            difficulty: difficulty, // NEU: Schwierigkeit hinzufügen
         };
         await onSubmit(questionData);
-        // Formular-Reset wird extern gehandhabt oder durch initialData-Änderung
     };
 
     return (
@@ -93,7 +97,7 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSubmit, initialData, isLo
                 <Input id="q-optD" label="Option D" value={optionD} onChange={(e) => setOptionD(e.target.value)} required placeholder="Antwortmöglichkeit D" />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                     <label htmlFor="q-correct" className="form-label">Korrekte Option</label>
                     <select
@@ -108,10 +112,29 @@ const QuestionForm: React.FC<QuestionFormProps> = ({ onSubmit, initialData, isLo
                         <option value="D">D</option>
                     </select>
                 </div>
+                
+                {/* NEU: Schwierigkeitsgrad-Dropdown */}
+                <div>
+                    <label htmlFor="q-difficulty" className="form-label">Schwierigkeitsgrad</label>
+                    <select
+                        id="q-difficulty"
+                        value={difficulty}
+                        onChange={(e) => setDifficulty(e.target.value as 'EASY' | 'MEDIUM' | 'HARD')}
+                        className="form-input"
+                    >
+                        <option value="EASY">🟢 Leicht</option>
+                        <option value="MEDIUM">🟡 Mittel</option>
+                        <option value="HARD">🔴 Schwer</option>
+                    </select>
+                    <p className="text-xs text-textSecondary mt-1">
+                        Bestimmt die Schwierigkeit für Solo-Training
+                    </p>
+                </div>
+                
                 <Input id="q-category" label="Kategorie (optional)" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="z.B. Klima, Ernährung" />
             </div>
 
-            {/* Neues Feld für die Quelle */}
+            {/* Quellenfeld */}
             <div>
                 <label htmlFor="q-source" className="form-label">Quelle (URL) (optional)</label>
                 <input

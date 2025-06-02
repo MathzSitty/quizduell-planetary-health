@@ -7,12 +7,11 @@ import { Question, ApiResponse } from '../../types';
 import QuestionForm from '../../components/admin/QuestionForm';
 import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
-import { Edit3, Trash2, PlusCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Edit3, Trash2, PlusCircle, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const ITEMS_PER_PAGE = 10;
 
-// Interface für die spezifische Antwort von der Fragen-API
 interface QuestionsApiResponse {
     status: 'success' | 'error';
     questions: Question[];
@@ -23,7 +22,7 @@ interface QuestionsApiResponse {
 }
 
 export default function AdminPage() {
-    useRequireAuth({ requireAdmin: true }); // Schützt die Seite
+    useRequireAuth({ requireAdmin: true });
 
     const [questions, setQuestions] = useState<Question[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -36,13 +35,31 @@ export default function AdminPage() {
     const [currentPage, setCurrentPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalQuestions, setTotalQuestions] = useState(0);
+    
+    // NEU: Filter-States
+    const [difficultyFilter, setDifficultyFilter] = useState<'ALL' | 'EASY' | 'MEDIUM' | 'HARD'>('ALL');
+    const [categoryFilter, setCategoryFilter] = useState('');
+    const [showFilters, setShowFilters] = useState(false);
 
     const fetchQuestions = async (page = 1) => {
         setIsLoading(true);
         setError(null);
         try {
-            // Verwende das korrekte Interface für die API-Antwort
-            const response = await apiClient.get<QuestionsApiResponse>(`/questions?page=${page}&limit=${ITEMS_PER_PAGE}`);
+            // NEU: Filter-Parameter hinzufügen
+            const params = new URLSearchParams({
+                page: page.toString(),
+                limit: ITEMS_PER_PAGE.toString()
+            });
+            
+            if (difficultyFilter !== 'ALL') {
+                params.append('difficulty', difficultyFilter);
+            }
+            
+            if (categoryFilter.trim()) {
+                params.append('category', categoryFilter.trim());
+            }
+
+            const response = await apiClient.get<QuestionsApiResponse>(`/questions?${params.toString()}`);
             if (response.data.status === 'success' && response.data.questions) {
                 setQuestions(response.data.questions);
                 setTotalPages(response.data.totalPages || 1);
@@ -62,21 +79,21 @@ export default function AdminPage() {
 
     useEffect(() => {
         fetchQuestions(currentPage);
-    }, [currentPage]);
+    }, [currentPage, difficultyFilter, categoryFilter]); // NEU: Filter als Dependencies
 
     const handleFormSubmit = async (questionData: Partial<Question>) => {
         setFormSubmitting(true);
         try {
-            if (editingQuestion && editingQuestion.id) { // Update
+            if (editingQuestion && editingQuestion.id) {
                 await apiClient.put(`/questions/${editingQuestion.id}`, questionData);
                 toast.success('Frage erfolgreich aktualisiert!');
-            } else { // Create
+            } else {
                 await apiClient.post('/questions', questionData);
                 toast.success('Frage erfolgreich erstellt!');
             }
             setShowForm(false);
             setEditingQuestion(null);
-            fetchQuestions(editingQuestion ? currentPage : 1); // Bei neuer Frage zur ersten Seite
+            fetchQuestions(editingQuestion ? currentPage : 1);
         } catch (err: any) {
             console.error("Fehler beim Speichern der Frage:", err);
             toast.error(err.response?.data?.message || err.message || 'Fehler beim Speichern.');
@@ -88,7 +105,7 @@ export default function AdminPage() {
     const handleEdit = (question: Question) => {
         setEditingQuestion(question);
         setShowForm(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' }); // Zum Formular scrollen
+        window.scrollTo({ top: 0, behavior: 'smooth' });
     };
 
     const handleDelete = async (questionId: string) => {
@@ -97,11 +114,10 @@ export default function AdminPage() {
                 await apiClient.delete(`/questions/${questionId}`);
                 toast.success('Frage erfolgreich gelöscht!');
                 setQuestions(prev => prev.filter(q => q.id !== questionId));
-                // Optional: Wenn die aktuelle Seite leer wird, zur vorherigen Seite springen
                 if (questions.length === 1 && currentPage > 1) {
                     setCurrentPage(currentPage - 1);
                 } else {
-                    fetchQuestions(currentPage); // Um Paginierungsinfos neu zu laden
+                    fetchQuestions(currentPage);
                 }
             } catch (err: any) {
                 console.error("Fehler beim Löschen der Frage:", err);
@@ -115,6 +131,26 @@ export default function AdminPage() {
         setShowForm(true);
     };
 
+    // NEU: Filter zurücksetzen
+    const resetFilters = () => {
+        setDifficultyFilter('ALL');
+        setCategoryFilter('');
+        setCurrentPage(1);
+    };
+
+    // NEU: Schwierigkeitsgrad-Badge-Funktion
+    const getDifficultyBadge = (difficulty?: string) => {
+        if (!difficulty) return <span className="text-xs text-textSecondary">-</span>;
+        
+        const badges = {
+            EASY: <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">🟢 Leicht</span>,
+            MEDIUM: <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">🟡 Mittel</span>,
+            HARD: <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">🔴 Schwer</span>
+        };
+        
+        return badges[difficulty as keyof typeof badges] || <span className="text-xs text-textSecondary">{difficulty}</span>;
+    };
+
     return (
         <>
             <Head>
@@ -123,10 +159,61 @@ export default function AdminPage() {
             <div className="main-container">
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-3xl font-bold text-textPrimary">Fragenverwaltung</h1>
-                    <Button onClick={openNewQuestionForm} leftIcon={<PlusCircle size={20}/>} disabled={showForm && !editingQuestion}>
-                        Neue Frage
-                    </Button>
+                    <div className="flex gap-3">
+                        <Button onClick={() => setShowFilters(!showFilters)} variant="outline" leftIcon={<Filter size={20}/>}>
+                            Filter {showFilters ? 'verbergen' : 'anzeigen'}
+                        </Button>
+                        <Button onClick={openNewQuestionForm} leftIcon={<PlusCircle size={20}/>} disabled={showForm && !editingQuestion}>
+                            Neue Frage
+                        </Button>
+                    </div>
                 </div>
+
+                {/* NEU: Filter-Panel */}
+                {showFilters && (
+                    <div className="mb-6 p-4 bg-surface rounded-lg shadow-md">
+                        <h3 className="text-lg font-semibold mb-4 text-textPrimary">Filter</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label htmlFor="difficulty-filter" className="form-label">Schwierigkeitsgrad</label>
+                                <select
+                                    id="difficulty-filter"
+                                    value={difficultyFilter}
+                                    onChange={(e) => setDifficultyFilter(e.target.value as any)}
+                                    className="form-input"
+                                >
+                                    <option value="ALL">Alle Schwierigkeitsgrade</option>
+                                    <option value="EASY">🟢 Leicht</option>
+                                    <option value="MEDIUM">🟡 Mittel</option>
+                                    <option value="HARD">🔴 Schwer</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="category-filter" className="form-label">Kategorie</label>
+                                <input
+                                    id="category-filter"
+                                    type="text"
+                                    value={categoryFilter}
+                                    onChange={(e) => setCategoryFilter(e.target.value)}
+                                    className="form-input"
+                                    placeholder="z.B. Planetary Health"
+                                />
+                            </div>
+                            <div className="flex items-end">
+                                <Button onClick={resetFilters} variant="outline" className="w-full">
+                                    Filter zurücksetzen
+                                </Button>
+                            </div>
+                        </div>
+                        {(difficultyFilter !== 'ALL' || categoryFilter) && (
+                            <p className="mt-3 text-sm text-textSecondary">
+                                Aktive Filter: {difficultyFilter !== 'ALL' && `Schwierigkeit: ${difficultyFilter}`}
+                                {difficultyFilter !== 'ALL' && categoryFilter && ', '}
+                                {categoryFilter && `Kategorie: "${categoryFilter}"`}
+                            </p>
+                        )}
+                    </div>
+                )}
 
                 {showForm && (
                     <div className="mb-10">
@@ -144,7 +231,10 @@ export default function AdminPage() {
 
                 {!isLoading && !error && questions.length === 0 && !showForm && (
                     <p className="text-center text-textSecondary my-10">
-                        Keine Fragen gefunden. Erstelle die erste Frage!
+                        {(difficultyFilter !== 'ALL' || categoryFilter) ? 
+                            'Keine Fragen mit den gewählten Filtern gefunden.' : 
+                            'Keine Fragen gefunden. Erstelle die erste Frage!'
+                        }
                     </p>
                 )}
 
@@ -155,6 +245,7 @@ export default function AdminPage() {
                                 <thead className="bg-neutral-light">
                                 <tr>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-textPrimary uppercase tracking-wider">Fragetext (gekürzt)</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-textPrimary uppercase tracking-wider">Schwierigkeit</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-textPrimary uppercase tracking-wider">Kategorie</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-textPrimary uppercase tracking-wider">Autor</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-textPrimary uppercase tracking-wider">Aktionen</th>
@@ -165,6 +256,9 @@ export default function AdminPage() {
                                     <tr key={q.id} className="hover:bg-neutral-light/50 transition-colors">
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-textSecondary max-w-sm truncate" title={q.text}>
                                             {q.text.substring(0, 60)}{q.text.length > 60 && '...'}
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-textSecondary">
+                                            {getDifficultyBadge(q.difficulty)}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-textSecondary">{q.category || '-'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-textSecondary">{q.author?.name || 'N/A'}</td>
@@ -192,18 +286,18 @@ export default function AdminPage() {
                                         disabled={currentPage === 1}
                                         size="sm"
                                         variant="outline"
-                                        leftIcon={<ChevronLeft size={16}/>}
+                                        leftIcon={<ChevronLeft size={16} />}
                                     >
-                                        Vorherige
+                                        Zurück
                                     </Button>
                                     <Button
                                         onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                                         disabled={currentPage === totalPages}
                                         size="sm"
                                         variant="outline"
-                                        rightIcon={<ChevronRight size={16}/>}
+                                        rightIcon={<ChevronRight size={16} />}
                                     >
-                                        Nächste
+                                        Weiter
                                     </Button>
                                 </div>
                             </div>

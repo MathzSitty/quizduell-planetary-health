@@ -1,3 +1,4 @@
+// frontend/pages/game/[gameId].tsx
 import { useRouter } from 'next/router';
 import { useEffect, useState, useCallback } from 'react';
 import Head from 'next/head';
@@ -36,12 +37,17 @@ const GamePage = () => {
   const [timeLimit, setTimeLimit] = useState(30); // Default, wird von Server überschrieben
   const [timerKey, setTimerKey] = useState(0); // Key zum Reset des Timers
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+
   const [showGameOver, setShowGameOver] = useState(false); // Neuer State für Game Over Anzeige
 
   // --- Helper to always set the correct opponent ---
   const determineOpponent = useCallback(
     (gameObj: Game | null, userId: string | undefined | null) => {
       if (!gameObj || !userId) return null;
+      
+      // NEU: Solo-Spiele haben keinen Gegner
+      if (gameObj.isSolo) return null;
+      
       if (gameObj.player1Id === userId) {
         return gameObj.player2 ?? null;
       } else if (gameObj.player2Id === userId) {
@@ -102,6 +108,9 @@ const GamePage = () => {
 
   useEffect(() => {
     if (!socket || !isConnected || !gameId || !currentUser) return;
+
+    // NEU: Solo-Spiele benötigen keine Socket-Events
+    if (game?.isSolo) return;
 
     const handleGameStarted = (data: GameStartedPayload) => {
       if (data.game.id !== gameId) return;
@@ -229,9 +238,69 @@ const GamePage = () => {
       socket.off('opponent_forfeited', handleOpponentLeftOrForfeited);
       socket.off('game_updated', handleGameUpdate);
     };
-  }, [socket, isConnected, gameId, currentUser, opponent?.name, determineOpponent, showRoundResult]);
+  }, [socket, isConnected, gameId, currentUser, opponent?.name, determineOpponent, showRoundResult, game?.isSolo]);
+
+  // NEU: Solo-Spiel Antwort-Handler
+  const handleSoloAnswer = async (selectedOpt: 'A' | 'B' | 'C' | 'D') => {
+    if (!game || hasAnsweredThisRound || showRoundResult) return;
+
+    setSelectedOption(selectedOpt);
+    setHasAnsweredThisRound(true);
+    setIsTimerRunning(false);
+
+    try {
+      const response = await apiClient.post(`/games/${game.id}/answer`, {
+        roundNumber: currentRoundNumber,
+        selectedOption: selectedOpt
+      });
+
+      if (response.data.status === 'success') {
+        const { roundResult, nextQuestion } = response.data.data;
+        
+        setLastRoundResult(roundResult);
+        setShowRoundResult(true);
+
+        // Update game score
+        setGame(prev => prev ? {
+          ...prev,
+          player1Score: roundResult.player1CurrentScore,
+          status: roundResult.gameStatus
+        } : null);
+
+        // Nach 3 Sekunden zur nächsten Frage oder Spielende
+        setTimeout(() => {
+          if (nextQuestion && roundResult.gameStatus === 'ACTIVE') {
+            setCurrentQuestion(nextQuestion);
+            setCurrentRoundNumber(prev => prev + 1);
+            setSelectedOption(null);
+            setHasAnsweredThisRound(false);
+            setShowRoundResult(false);
+            setLastRoundResult(null);
+            setTimerKey(prev => prev + 1);
+            setIsTimerRunning(true);
+          } else {
+            // Spiel beendet
+            setShowRoundResult(false);
+            setShowGameOver(true);
+          }
+        }, 3000);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Fehler beim Senden der Antwort');
+      setHasAnsweredThisRound(false);
+      setSelectedOption(null);
+      setIsTimerRunning(true);
+    }
+  };
 
   const handleAnswer = (selectedOpt: 'A' | 'B' | 'C' | 'D') => {
+    // NEU: Solo-Spiele verwenden API-Calls statt Socket-Events
+    if (game?.isSolo) {
+      handleSoloAnswer(selectedOpt);
+      return;
+    }
+
+    // Bestehende PvP-Socket-Logik
     if (!socket || !game || hasAnsweredThisRound || showRoundResult || game.status !== 'ACTIVE') return;
 
     setSelectedOption(selectedOpt);
@@ -254,7 +323,64 @@ const GamePage = () => {
     });
   };
 
+  // NEU: Solo-Timeout-Handler
+  const handleSoloTimeout = async () => {
+    if (!game || hasAnsweredThisRound || showRoundResult) return;
+
+    setHasAnsweredThisRound(true);
+    setIsTimerRunning(false);
+    toast.error('Zeit abgelaufen!', { icon: '⏳' });
+
+    try {
+      const response = await apiClient.post(`/games/${game.id}/answer`, {
+        roundNumber: currentRoundNumber,
+        selectedOption: null // Timeout
+      });
+
+      if (response.data.status === 'success') {
+        const { roundResult, nextQuestion } = response.data.data;
+        
+        setLastRoundResult(roundResult);
+        setShowRoundResult(true);
+
+        // Update game score
+        setGame(prev => prev ? {
+          ...prev,
+          player1Score: roundResult.player1CurrentScore,
+          status: roundResult.gameStatus
+        } : null);
+
+        // Nach 3 Sekunden zur nächsten Frage oder Spielende
+        setTimeout(() => {
+          if (nextQuestion && roundResult.gameStatus === 'ACTIVE') {
+            setCurrentQuestion(nextQuestion);
+            setCurrentRoundNumber(prev => prev + 1);
+            setSelectedOption(null);
+            setHasAnsweredThisRound(false);
+            setShowRoundResult(false);
+            setLastRoundResult(null);
+            setTimerKey(prev => prev + 1);
+            setIsTimerRunning(true);
+          } else {
+            // Spiel beendet
+            setShowRoundResult(false);
+            setShowGameOver(true);
+          }
+        }, 3000);
+      }
+    } catch (error: any) {
+      console.error('Timeout error:', error);
+    }
+  };
+
   const handleTimeout = useCallback(() => {
+    // NEU: Solo-Spiele verwenden API-Calls statt Socket-Events
+    if (game?.isSolo) {
+      handleSoloTimeout();
+      return;
+    }
+
+    // Bestehende PvP-Socket-Logik
     if (!hasAnsweredThisRound && game && game.status === 'ACTIVE') {
       toast.error('Zeit abgelaufen!', { icon: '⏳' });
       setHasAnsweredThisRound(true);
@@ -279,6 +405,15 @@ const GamePage = () => {
   }, [hasAnsweredThisRound, game, currentRoundNumber, socket]);
 
   const handleLeaveGame = () => {
+    if (game?.isSolo) {
+      // Solo-Spiele können direkt verlassen werden
+      if (confirm("Möchtest du das Training wirklich beenden?")) {
+        router.push('/game');
+      }
+      return;
+    }
+
+    // PvP-Spiele über Socket
     if (socket && game) {
       if (confirm("Möchtest du das Spiel wirklich verlassen? Dein Gegner gewinnt dadurch (falls vorhanden).")) {
         socket.emit('leave_game', { gameId: game.id });
@@ -289,7 +424,6 @@ const GamePage = () => {
 
   if (isLoading) return <div className="main-container text-center py-20"><Spinner size="lg" /><p className="mt-4 text-textSecondary">Lade Spiel...</p></div>;
   if (error) return <div className="main-container text-center py-20 card bg-red-50"><AlertTriangle size={48} className="text-red-500 mx-auto mb-4" /><p className="text-red-700">{error}</p><Button onClick={() => router.push('/game')} className="mt-6">Zurück zur Lobby</Button></div>;
-
   if (!game || !currentUser) return <div className="main-container text-center py-20"><p>Spiel nicht gefunden oder Initialisierung fehlgeschlagen.</p><Button onClick={() => router.push('/game')} className="mt-6">Zurück zur Lobby</Button></div>;
 
   const totalQuestions = game.rounds.length;
@@ -298,30 +432,58 @@ const GamePage = () => {
   return (
     <>
       <Head>
-        <title>QuizDuell: {game.player1?.name || 'Spieler 1'} vs {opponent?.name || game.player2?.name || 'Spieler 2'}</title>
+        <title>QuizDuell: {game.isSolo ? 'Solo-Training' : `${game.player1?.name || 'Spieler 1'} vs ${opponent?.name || game.player2?.name || 'Spieler 2'}`}</title>
       </Head>
       <div className="main-container">
-        <GameStatusDisplay game={game} currentUser={currentUser} opponent={opponent} />
+        <GameStatusDisplay game={game} currentUser={currentUser} opponent={opponent} isSolo={game.isSolo} />
 
         {showGameOver && gameIsOver ? (
           <div className="card text-center py-10 animate-fadeIn">
-            <h2 className="text-3xl font-bold mb-6">Spiel beendet!</h2>
+            <h2 className="text-3xl font-bold mb-6">
+              {game.isSolo ? 'Training beendet!' : 'Spiel beendet!'}
+            </h2>
             {game.status === 'CANCELLED' && (
-              <p className="text-xl text-accent mb-4">Das Spiel wurde abgebrochen.</p>
-            )}
-            {game.winnerId ? (
-              <p className="text-2xl text-secondary mb-2">
-                <Trophy size={30} className="inline mr-2 text-yellow-400" />
-                Gewinner: {game.winnerId === game.player1Id ? game.player1.name : game.player2?.name}
+              <p className="text-xl text-accent mb-4">
+                {game.isSolo ? 'Das Training wurde abgebrochen.' : 'Das Spiel wurde abgebrochen.'}
               </p>
-            ) : game.status === 'FINISHED' ? (
-              <p className="text-2xl text-textPrimary mb-2">Unentschieden!</p>
-            ) : null}
-            <p className="text-xl mt-4">
-              Endstand: {game.player1.name}: {game.player1Score} - {game.player2?.name || 'Gegner'}: {game.player2Score}
-            </p>
+            )}
+            {game.isSolo ? (
+              <>
+                <p className="text-2xl text-secondary mb-2">
+                  <Trophy size={30} className="inline mr-2 text-yellow-400" />
+                  Training abgeschlossen!
+                </p>
+                <p className="text-xl mt-4">
+                  Dein Ergebnis: {game.player1Score} von {totalQuestions} Fragen richtig
+                </p>
+                {game.difficulty && (
+                  <p className="text-sm text-textSecondary mt-2">
+                    Schwierigkeitsgrad: {
+                      game.difficulty === 'EASY' ? '🟢 Leicht' :
+                      game.difficulty === 'MEDIUM' ? '🟡 Mittel' : '🔴 Schwer'
+                    }
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                {game.winnerId ? (
+                  <p className="text-2xl text-secondary mb-2">
+                    <Trophy size={30} className="inline mr-2 text-yellow-400" />
+                    Gewinner: {game.winnerId === game.player1Id ? game.player1.name : game.player2?.name}
+                  </p>
+                ) : game.status === 'FINISHED' ? (
+                  <p className="text-2xl text-textPrimary mb-2">Unentschieden!</p>
+                ) : null}
+                <p className="text-xl mt-4">
+                  Endstand: {game.player1.name}: {game.player1Score} - {game.player2?.name || 'Gegner'}: {game.player2Score}
+                </p>
+              </>
+            )}
             <div className="mt-8 space-x-4">
-              <Button onClick={() => router.push('/game')} variant="primary" size="lg" leftIcon={<Swords />}>Neue Runde</Button>
+              <Button onClick={() => router.push('/game')} variant="primary" size="lg" leftIcon={<Swords />}>
+                {game.isSolo ? 'Neues Training' : 'Neue Runde'}
+              </Button>
               <Button onClick={() => router.push('/leaderboard')} variant="outline" size="lg" leftIcon={<Trophy />}>Leaderboard</Button>
             </div>
           </div>
@@ -329,6 +491,12 @@ const GamePage = () => {
           <>
             <p className="text-center text-sm text-textSecondary mb-2">
               Frage {currentRoundNumber} von {totalQuestions}
+              {game.isSolo && game.difficulty && (
+                <span className="ml-2">
+                  ({game.difficulty === 'EASY' ? '🟢 Leicht' :
+                    game.difficulty === 'MEDIUM' ? '🟡 Mittel' : '🔴 Schwer'})
+                </span>
+              )}
             </p>
             <TimerDisplay
               key={timerKey}
@@ -342,7 +510,7 @@ const GamePage = () => {
               disabledOptions={hasAnsweredThisRound || showRoundResult || !isTimerRunning}
               selectedOption={selectedOption}
               correctOption={showRoundResult ? lastRoundResult?.correctOption : null}
-              opponentAnswer={showRoundResult ? (currentUser?.id === game.player1Id ? lastRoundResult?.player2Answer : lastRoundResult?.player1Answer) : null}
+              opponentAnswer={showRoundResult && !game.isSolo ? (currentUser?.id === game.player1Id ? lastRoundResult?.player2Answer : lastRoundResult?.player1Answer) : null}
               showSource={showRoundResult}
             />
 
@@ -394,7 +562,7 @@ const GamePage = () => {
         {!gameIsOver && (
           <div className="mt-8 text-center">
             <Button onClick={handleLeaveGame} variant="danger" className="ml-auto">
-              Spiel verlassen
+              {game.isSolo ? 'Training beenden' : 'Spiel verlassen'}
             </Button>
           </div>
         )}

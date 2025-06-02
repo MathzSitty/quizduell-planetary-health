@@ -1,15 +1,45 @@
-// Dateipfad: d:\quizduell-planetary-health\frontend\components\game\GameStatusDisplay.tsx
+// frontend/components/game/GameStatusDisplay.tsx
 import React from 'react';
 import { Game, User } from '../../types';
-import { Trophy } from 'lucide-react';
+import { Trophy, Brain } from 'lucide-react';
  
 interface GameStatusDisplayProps {
     game: Game;
     currentUser: User | null;
     opponent: Partial<User> | null;
+    isSolo?: boolean; // NEU: Optional isSolo prop
 }
 
-const GameStatusDisplay: React.FC<GameStatusDisplayProps> = ({ game, currentUser, opponent }) => {
+const GameStatusDisplay: React.FC<GameStatusDisplayProps> = ({ game, currentUser, opponent, isSolo }) => {
+    // NEU: Solo-Spiele haben eine andere Anzeige
+    if (isSolo || game.isSolo) {
+        return (
+            <div className="mb-8 p-6 bg-surface rounded-xl shadow-md">
+                <div className="flex flex-col items-center justify-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <Brain className="text-primary" size={24} />
+                        <h2 className="text-2xl font-bold text-textPrimary">Solo-Training</h2>
+                    </div>
+                    
+                    <div className="text-center">
+                        <h3 className="text-xl font-semibold">{currentUser?.name || 'Du'}</h3>
+                        <p className="text-3xl font-bold mt-1 text-primary">{game.player1Score}</p>
+                        <p className="text-sm text-textSecondary mt-1">
+                            {game.difficulty && (
+                                <>Schwierigkeit: {
+                                    game.difficulty === 'EASY' ? '🟢 Leicht' :
+                                    game.difficulty === 'MEDIUM' ? '🟡 Mittel' : '🔴 Schwer'
+                                }</>
+                            )}
+                            {!game.difficulty && 'Gemischte Schwierigkeit'}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    // Bestehende PvP-Logik
     // Bestimme, ob der aktuelle Benutzer Spieler 1 ist (wichtig für die Punktedarstellung)
     const isPlayer1 = currentUser && game.player1Id === currentUser.id;
     

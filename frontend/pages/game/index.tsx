@@ -1,10 +1,11 @@
+// frontend/pages/game/index.tsx
 import Head from 'next/head';
 import { useRouter } from 'next/router';
 import { useEffect, useState } from 'react';
 import { useRequireAuth } from '../../hooks/useRequireAuth';
 import { useSocket } from '../../contexts/SocketContext';
 import { Game } from '../../types';
-import { Search, UserPlus, Clock } from 'lucide-react';
+import { Search, UserPlus, Clock, Brain } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import Spinner from '../../components/ui/Spinner';
 import toast from 'react-hot-toast';
@@ -27,6 +28,9 @@ export default function GamePage() {
   // Zustand für "Letzte Spiele"
   const [recentGames, setRecentGames] = useState<Game[]>([]);
   const [isLoadingGames, setIsLoadingGames] = useState(false);
+  
+  // NEU: Zustand für Solo-Training
+  const [isStartingSolo, setIsStartingSolo] = useState(false);
   
   // Socket-Events für Matchmaking
   useEffect(() => {
@@ -105,6 +109,24 @@ export default function GamePage() {
     setCurrentGameId(null);
   };
 
+  // NEU: Solo-Training-Handler
+  const handleStartSoloTraining = async (difficulty?: 'EASY' | 'MEDIUM' | 'HARD') => {
+    if (!currentUser) return;
+    
+    setIsStartingSolo(true);
+    try {
+      const response = await apiClient.post('/games/solo', { difficulty });
+      if (response.data.status === 'success') {
+        const soloGame = response.data.data.game;
+        router.push(`/game/${soloGame.id}`);
+      }
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Fehler beim Starten des Solo-Trainings');
+    } finally {
+      setIsStartingSolo(false);
+    }
+  };
+
   // Laden der letzten Spiele
   useEffect(() => {
     const fetchRecentGames = async () => {
@@ -138,10 +160,11 @@ export default function GamePage() {
       <div className="main-container">
         <h1 className="text-3xl font-bold mb-6 text-textPrimary">Spielelobby</h1>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {/* PvP-Spiel */}
           <div className="card">
             <h2 className="text-xl font-semibold mb-4 flex items-center text-textPrimary">
-              <Search className="mr-2" size={20} /> Spiel finden
+              <Search className="mr-2" size={20} /> PvP-Duell
             </h2>
             <p className="mb-6 text-textSecondary">
               Finde einen Gegner und starte ein neues Quiz-Duell zu Planetary Health Themen!
@@ -179,8 +202,55 @@ export default function GamePage() {
               </div>
             )}
           </div>
-          
+
+          {/* NEU: Solo-Training */}
           <div className="card">
+            <h2 className="text-xl font-semibold mb-4 flex items-center text-textPrimary">
+              <Brain className="mr-2" size={20} /> Solo-Training
+            </h2>
+            <p className="mb-6 text-textSecondary">
+              Trainiere alleine und verbessere dein Wissen in verschiedenen Schwierigkeitsgraden!
+            </p>
+            
+            <div className="space-y-3">
+              <Button 
+                onClick={() => handleStartSoloTraining('EASY')} 
+                variant="outline" 
+                className="w-full"
+                disabled={isStartingSolo}
+              >
+                🟢 Leichtes Training
+              </Button>
+              <Button 
+                onClick={() => handleStartSoloTraining('MEDIUM')} 
+                variant="outline" 
+                className="w-full"
+                disabled={isStartingSolo}
+              >
+                🟡 Mittleres Training
+              </Button>
+              <Button 
+                onClick={() => handleStartSoloTraining('HARD')} 
+                variant="outline" 
+                className="w-full"
+                disabled={isStartingSolo}
+              >
+                🔴 Schweres Training
+              </Button>
+              <Button 
+                onClick={() => handleStartSoloTraining()} 
+                variant="primary" 
+                className="w-full"
+                disabled={isStartingSolo}
+                isLoading={isStartingSolo}
+              >
+                🎲 Gemischtes Training
+              </Button>
+            </div>
+          </div>
+
+          {/* Letzte Spiele */}
+          <div className="card md:col-span-2 lg:col-span-1">
             <h2 className="text-xl font-semibold mb-4 flex items-center text-textPrimary">
               <Clock className="mr-2" size={20} /> Letzte Spiele
             </h2>

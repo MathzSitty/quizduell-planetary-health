@@ -11,7 +11,7 @@ import {
 
 export const createQuestion = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const authorId = req.user?.id; // Von 'protect' Middleware
+        const authorId = req.user?.id;
         if (!authorId) {
             return res.status(403).json({ message: 'Nur authentifizierte Benutzer können Fragen erstellen.' });
         }
@@ -27,8 +27,9 @@ export const getAllQuestions = async (req: Request, res: Response, next: NextFun
         const page = req.query.page ? parseInt(req.query.page as string) : 1;
         const limit = req.query.limit ? parseInt(req.query.limit as string) : 10;
         const category = req.query.category as string | undefined;
+        const difficulty = req.query.difficulty as string | undefined; // NEU: Schwierigkeits-Filter
 
-        const result = await getAllQuestionsService(page, limit, category);
+        const result = await getAllQuestionsService(page, limit, category, difficulty as any);
         res.status(200).json({ status: 'success', ...result });
     } catch (error) {
         next(error);
@@ -49,7 +50,6 @@ export const getQuestionById = async (req: Request, res: Response, next: NextFun
 
 export const updateQuestion = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // Optional: Prüfen, ob der User der Autor der Frage ist oder Admin
         const question = await updateQuestionService(req.params.id, req.body);
         if (!question) {
             return res.status(404).json({ message: 'Frage nicht gefunden oder Update fehlgeschlagen.' });
@@ -62,12 +62,8 @@ export const updateQuestion = async (req: Request, res: Response, next: NextFunc
 
 export const deleteQuestion = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        // Optional: Prüfen, ob der User der Autor der Frage ist oder Admin
-        const question = await deleteQuestionService(req.params.id);
-        if (!question) {
-            return res.status(404).json({ message: 'Frage nicht gefunden oder Löschen fehlgeschlagen.' });
-        }
-        res.status(204).send(); // No content
+        await deleteQuestionService(req.params.id);
+        res.status(204).send();
     } catch (error) {
         next(error);
     }
@@ -75,9 +71,11 @@ export const deleteQuestion = async (req: Request, res: Response, next: NextFunc
 
 export const getRandomQuestions = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const count = req.query.count ? parseInt(req.query.count as string, 10) : 5; // Standardmäßig 5 Fragen
+        const count = req.query.count ? parseInt(req.query.count as string, 10) : 5;
         const category = req.query.category as string | undefined;
-        const questions = await getRandomQuestionsService(count, category);
+        const difficulty = req.query.difficulty as string | undefined; // NEU: Schwierigkeits-Filter
+        
+        const questions = await getRandomQuestionsService(count, category, difficulty as any);
         res.status(200).json({ status: 'success', data: { questions } });
     } catch (error) {
         next(error);

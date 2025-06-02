@@ -1,4 +1,3 @@
-// backend/prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -6,6 +5,12 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM  
+  HARD
 }
 
 model User {
@@ -23,7 +28,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   
-  // Your existing relations
+  // Relations
   gamesAsPlayer1 Game[] @relation("Player1Games")
   gamesAsPlayer2 Game[] @relation("Player2Games")
   questionsAuthored Question[] @relation("AuthoredQuestions")
@@ -31,38 +36,41 @@ model User {
 }
 
 model Question {
-  id            String   @id @default(cuid())
-  text          String   @unique
+  id            String      @id @default(cuid())
+  text          String      @unique
   optionA       String
   optionB       String
   optionC       String
   optionD       String
   correctOption String
   category      String?
-  source        String?  // Feld für die Quellenangabe (URL)
+  source        String?     // Feld für die Quellenangabe (URL)
+  difficulty    Difficulty  @default(MEDIUM) // NEU: Schwierigkeitsgrad
   authorId      String?
-  author        User?    @relation("AuthoredQuestions", fields: [authorId], references: [id], onDelete: SetNull)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  author        User?       @relation("AuthoredQuestions", fields: [authorId], references: [id], onDelete: SetNull)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   gameRounds GameRound[]
 }
 
 model Game {
-  id              String    @id @default(cuid())
+  id              String      @id @default(cuid())
   player1Id       String
   player2Id       String?
-  status          String    @default("PENDING")
-  currentQuestionIdx Int    @default(0)
-  player1Score    Int       @default(0)
-  player2Score    Int       @default(0)
+  status          String      @default("PENDING")
+  currentQuestionIdx Int      @default(0)
+  player1Score    Int         @default(0)
+  player2Score    Int         @default(0)
   winnerId        String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  isSolo          Boolean     @default(false)  // NEU: Solo-Modus Flag
+  difficulty      Difficulty? // NEU: Schwierigkeit für Solo-Spiele
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  player1         User      @relation("Player1Games", fields: [player1Id], references: [id])
-  player2         User?     @relation("Player2Games", fields: [player2Id], references: [id])
-  winner          User?     @relation("WonGames", fields: [winnerId], references: [id])
+  player1         User        @relation("Player1Games", fields: [player1Id], references: [id])
+  player2         User?       @relation("Player2Games", fields: [player2Id], references: [id])
+  winner          User?       @relation("WonGames", fields: [winnerId], references: [id])
   rounds          GameRound[]
 }
 

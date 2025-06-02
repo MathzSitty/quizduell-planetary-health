@@ -1,13 +1,13 @@
 // frontend/types/index.ts
-
 export interface User {
     id: string;
     name: string;
     email: string;
     uniHandle?: string | null;
-    role: 'USER' | 'ADMIN';
+    role: string;
     score: number;
-    createdAt?: string; // ISO Date String
+    createdAt?: string;
+    updatedAt?: string;
 }
 
 export interface Question {
@@ -17,10 +17,11 @@ export interface Question {
     optionB: string;
     optionC: string;
     optionD: string;
-    correctOption?: string; // Wird für Spieler nicht immer gesendet
+    correctOption?: string;
     category?: string | null;
-    source?: string | null;  // Quellenfeld hinzugefügt
-    authorId?: string;
+    source?: string | null;
+    difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
+    authorId?: string | null;
     author?: { name: string; id: string };
     createdAt?: string;
     updatedAt?: string;
@@ -30,7 +31,7 @@ export interface GameRound {
     id: string;
     gameId: string;
     questionId: string;
-    question: Question; // Enthält die Frage-Details für die Runde
+    question: Question;
     roundNumber: number;
     player1AnsweredOption?: string | null;
     player2AnsweredOption?: string | null;
@@ -39,13 +40,13 @@ export interface GameRound {
     createdAt?: string;
 }
 
-export type GameStatus = 'PENDING' | 'ACTIVE' | 'ROUND_ENDED' | 'FINISHED' | 'CANCELLED';
+export type GameStatus = 'PENDING' | 'ACTIVE' | 'FINISHED' | 'CANCELLED';
 
 export interface Game {
     id: string;
     player1Id: string;
     player2Id?: string | null;
-    player1: Partial<User>; // Nur die wichtigsten Infos
+    player1: Partial<User>;
     player2?: Partial<User> | null;
     status: GameStatus;
     currentQuestionIdx: number;
@@ -53,7 +54,9 @@ export interface Game {
     player2Score: number;
     winnerId?: string | null;
     winner?: Partial<User> | null;
-    rounds: GameRound[]; // Die Runden mit den Fragen
+    rounds: GameRound[];
+    isSolo?: boolean;
+    difficulty?: 'EASY' | 'MEDIUM' | 'HARD';
     createdAt?: string;
     updatedAt?: string;
 }
@@ -61,11 +64,10 @@ export interface Game {
 // Für Socket Events
 export interface GameStartedPayload {
     game: Game;
-    questions: Question[]; // Die Fragen für das gesamte Spiel (ohne korrekte Antwort)
+    questions: Question[];
     timeLimit: number;
 }
 
-// Update bei der RoundResultPayload-Schnittstelle
 export interface RoundResultPayload {
     gameId: string;
     roundNumber: number;
@@ -79,27 +81,43 @@ export interface RoundResultPayload {
     player2CurrentScore: number;
     nextQuestion?: Question | null;
     gameStatus: GameStatus;
-    forcedByTimeout?: boolean; // Neues Flag hinzugefügt
+    forcedByTimeout?: boolean;
 }
 
-// Typ für AuthContext
+// AUTH CONTEXT TYPES - Diese fehlten!
 export interface AuthContextType {
     user: User | null;
     token: string | null;
     isLoading: boolean;
-    login: (email: string, pass: string) => Promise<void>;
-    register: (name: string, email: string, pass: string, uniHandle?: string) => Promise<void>;
+    login: (email: string, password: string) => Promise<void>;
+    register: (name: string, email: string, password: string, uniHandle?: string) => Promise<void>;
     logout: () => void;
-    fetchCurrentUser: () => Promise<void>; // Um User-Daten nachzuleaden
+    fetchCurrentUser: (token?: string | null) => Promise<void>;
 }
 
-// Typ für SocketContext
+// SOCKET CONTEXT TYPES
 export interface SocketContextType {
-    socket: import('socket.io-client').Socket | null;
+    socket: any | null;
     isConnected: boolean;
 }
 
-// Typ für API-Antworten (generisch)
+export interface AuthResponse {
+    token: string;
+    user: User;
+}
+
+export interface RegisterInput {
+    name: string;
+    email: string;
+    password: string;
+    uniHandle?: string;
+}
+
+export interface LoginInput {
+    email: string;
+    password: string;
+}
+
 export interface ApiResponse<T = any> {
     status: 'success' | 'error';
     data?: T;
